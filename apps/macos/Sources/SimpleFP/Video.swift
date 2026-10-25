@@ -333,7 +333,7 @@ final class VideoModel {
                 self.roi = [Double(summary.roi[0]) / Double(w), Double(summary.roi[1]) / Double(h), Double(summary.roi[2]) / Double(w), Double(summary.roi[3]) / Double(h)]
             }
             track = summary
-            if summary.roi.isEmpty { warning = "No arena found automatically: draw the arena ROI and track again." }
+            if summary.roi.isEmpty { warning = "No enclosed arena in view, so the whole frame was tracked. That suits side views like tail suspension; if people or objects move in view, draw the ROI and track again." }
         } catch {
             self.error = error.localizedDescription
         }

@@ -78,7 +78,7 @@ pub fn track_block(rec: &Recording, camera: &str, width: usize, params: TrackPar
     if params.roi.is_none() {
         params.roi = track::auto_arena(&bg, w, h, 2);
         if params.roi.is_none() {
-            warning = Some("no bright arena found; tracking the whole frame (draw an ROI for reliable results)".to_string());
+            warning = Some("no enclosed arena in view; tracked the whole frame (fine for side views like tail suspension; pass --roi if other things move in view)".to_string());
         }
     }
     let roi = params.roi;
