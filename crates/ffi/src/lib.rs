@@ -7,7 +7,7 @@ use simplefp::core::preset::{self, Preset};
 use simplefp::{EventSource, Recording};
 use std::collections::BTreeMap;
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 uniffi::setup_scaffolding!();
 
@@ -767,6 +767,8 @@ struct TrackState {
     tracker: Option<simplefp::video::track::Tracker>,
     dets: Vec<simplefp::video::track::Detection>,
     roi: Option<[usize; 4]>,
+    /// Keypoints in tracking-frame pixels, if a pose model has run.
+    pose: Option<simplefp::video::Pose>,
 }
 
 fn f64_bytes(v: &[f64]) -> Vec<u8> {
@@ -821,6 +823,20 @@ impl VideoTracker {
         Ok(())
     }
 
+    /// Attach pose keypoints (source-video pixels, flattened x, y, confidence per frame) so
+    /// detectors trained from now on also use pose features.
+    pub fn set_pose(&self, bodyparts: Vec<String>, xyc: Vec<f64>, source_width: u32, source_height: u32) -> R<()> {
+        let k = bodyparts.len();
+        if k == 0 || xyc.len() % (3 * k) != 0 || source_width == 0 || source_height == 0 {
+            return Err(FpError::from("keypoints do not match the bodyparts".to_string()));
+        }
+        let (sx, sy) = (self.w as f64 / source_width as f64, self.h as f64 / source_height as f64);
+        let n = xyc.len() / (3 * k);
+        let col = |b: usize, o: usize, s: f64| (0..n).map(|i| xyc[(i * k + b) * 3 + o] * s).collect::<Vec<f64>>();
+        self.state.lock().unwrap().pose = Some(simplefp::video::Pose { x: (0..k).map(|b| col(b, 0, sx)).collect(), y: (0..k).map(|b| col(b, 1, sy)).collect(), likelihood: (0..k).map(|b| col(b, 2, 1.0)).collect(), bodyparts });
+        Ok(())
+    }
+
     /// Features on the block clock of `camera` in `session`.
     pub fn finish(&self, session: &Session, camera: String, min_immobile_s: f64) -> R<TrackSummary> {
         let st = self.state.lock().unwrap();
@@ -840,6 +856,84 @@ impl VideoTracker {
             height: self.h as u32,
         })
     }
+}
+
+impl VideoTracker {
+    fn frame_features(&self, session: &Session, camera: &str) -> R<(simplefp::video::classify::Features, Vec<f64>)> {
+        let st = self.state.lock().unwrap();
+        let clock = session.rec.frame_clock(camera)?;
+        let n = clock.frames().map_or(st.dets.len(), |f| f.min(st.dets.len()));
+        let t: Vec<f64> = (0..n).map(|k| clock.time(k).unwrap_or(f64::NAN)).collect();
+        let roi = st.roi.unwrap_or([0, 0, self.w, self.h]);
+        let diag = ((roi[2] - roi[0]) as f64).hypot((roi[3] - roi[1]) as f64);
+        let extra = st.pose.as_ref().map(|p| simplefp::video::pose::pose_features(p, clock.fps, diag, 0.2)).unwrap_or_default();
+        let extra: Vec<(String, Vec<f64>)> = extra.into_iter().map(|(k, mut v)| { v.resize(n, f64::NAN); (k, v) }).collect();
+        let f = simplefp::video::classify::frame_features(&st.dets[..n], clock.fps, roi, &extra)?;
+        Ok((f, t))
+    }
+
+}
+
+/// Decode one frame's heatmaps (little-endian f32 bytes, `[K,H,W]` or `[H,W,K]`) to
+/// keypoints in frame pixels via the crop `[x0, y0, x1, y1]`. Returns flattened (x, y, confidence).
+#[uniffi::export]
+pub fn decode_pose_heatmaps(data: Vec<u8>, k: u32, h: u32, w: u32, channels_last: bool, crop: Vec<f64>) -> R<Vec<f64>> {
+    let f: Vec<f32> = data.as_chunks::<4>().0.iter().map(|c| f32::from_le_bytes(*c)).collect();
+    let crop: [f64; 4] = crop.try_into().map_err(|_| FpError::from("crop must have 4 values".to_string()))?;
+    let kp = simplefp::video::pose::decode_heatmaps(&f, k as usize, h as usize, w as usize, channels_last)?;
+    Ok(kp.into_iter().flat_map(|(x, y, c)| {
+        let (fx, fy) = simplefp::video::pose::to_frame((x, y), crop, w as usize, h as usize);
+        [fx, fy, c]
+    }).collect())
+}
+
+/// DeepLabCut-style CSV for keypoints: `xyc` = per frame, per bodypart (x, y, confidence).
+#[uniffi::export]
+pub fn pose_csv(bodyparts: Vec<String>, xyc: Vec<f64>, scorer: String) -> R<String> {
+    let k = bodyparts.len();
+    if k == 0 || xyc.len() % (3 * k) != 0 {
+        return Err(FpError::from("keypoint array does not match the bodyparts".to_string()));
+    }
+    let n = xyc.len() / (3 * k);
+    let col = |b: usize, o: usize| (0..n).map(|i| xyc[(i * k + b) * 3 + o]).collect::<Vec<f64>>();
+    let p = simplefp::video::Pose { bodyparts, x: (0..k).map(|b| col(b, 0)).collect(), y: (0..k).map(|b| col(b, 1)).collect(), likelihood: (0..k).map(|b| col(b, 2)).collect() };
+    Ok(simplefp::video::pose::write_dlc_csv(&p, &scorer))
+}
+
+/// One tracked, scored session for training: bouts as flattened (start, end) pairs.
+#[derive(uniffi::Record)]
+pub struct TrainingSession {
+    pub name: String,
+    pub session: Arc<Session>,
+    pub tracker: Arc<VideoTracker>,
+    pub camera: String,
+    pub bouts: Vec<f64>,
+}
+
+/// Train a behavior detector; returns the model file JSON (with its cross-validated evaluation).
+#[uniffi::export]
+pub fn train_behavior(sessions: Vec<TrainingSession>, behavior: String) -> R<String> {
+    let mut data = vec![];
+    let mut width = 0;
+    for s in &sessions {
+        let (f, t) = s.tracker.frame_features(&s.session, &s.camera)?;
+        let bouts: Vec<(f64, f64)> = s.bouts.chunks_exact(2).map(|c| (c[0], c[1])).collect();
+        width = s.tracker.w;
+        data.push((s.name.clone(), f, t.clone(), simplefp::behavior::labels(&t, &bouts)));
+    }
+    let (file, _) = simplefp::behavior::train_model(&data, &behavior, width, Default::default())?;
+    Ok(serde_json::to_string_pretty(&file).unwrap_or_default())
+}
+
+/// Proposals (annotation JSON array, `review: proposed`) from a model for one tracked session.
+#[uniffi::export]
+pub fn propose_behavior(model_json: String, session: Arc<Session>, tracker: Arc<VideoTracker>, camera: String) -> R<String> {
+    let m: simplefp::behavior::ModelFile = serde_json::from_str(&model_json).map_err(|e| FpError::from(format!("model file: {e}")))?;
+    if m.tracking_width != tracker.w {
+        return Err(FpError::from(format!("model was trained at {} px tracking width; this video was tracked at {} px", m.tracking_width, tracker.w)));
+    }
+    let (f, t) = tracker.frame_features(&session, &camera)?;
+    Ok(serde_json::to_string(&simplefp::behavior::propose(&m, &f, &t)?).unwrap_or_default())
 }
 
 fn envelope(y: &[f64], t0: f64, fs: f64, a: f64, b: f64, buckets: usize) -> Vec<u8> {

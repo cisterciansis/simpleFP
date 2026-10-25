@@ -110,3 +110,91 @@ pub fn export_behavior(r: &TrackResult, out: &Path) -> Result<(), String> {
     }
     std::fs::write(out.join("behavior_events.csv"), s).map_err(|e| e.to_string())
 }
+
+// ---------------------------------------------------------------- behavior classifiers
+
+use simplefp_video::classify::{self, Decode, Evaluation, Features as FrameFeatures, Labeled, Model, Params};
+
+/// A trained behavior detector as saved to disk, with its provenance and validation.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModelFile {
+    pub schema: u32,
+    pub behavior: String,
+    /// `simplefp-bt/<behavior>@<hash>`: written on every proposal it makes.
+    pub id: String,
+    pub tracking_width: usize,
+    pub decode: Decode,
+    pub trained_on: Vec<String>,
+    pub evaluation: serde_json::Value,
+    pub model: Model,
+}
+
+/// Features for a tracked session (ROI from tracking, or the whole frame).
+pub fn session_features(r: &TrackResult, fps: f64, width: usize) -> Result<FrameFeatures, String> {
+    let roi = r.roi.unwrap_or([0, 0, width, width * 3 / 4]);
+    classify::frame_features(&r.detections[..r.features.t.len()], fps, roi, &[])
+}
+
+/// Frame labels from human bouts `(start_s, end_s)`.
+pub fn labels(t: &[f64], bouts: &[(f64, f64)]) -> Vec<bool> {
+    t.iter().map(|&ti| bouts.iter().any(|&(a, b)| ti >= a && ti < b)).collect()
+}
+
+/// Bouts of `behavior` from a CSV with header `behavior,start_s,end_s`.
+pub fn read_bouts_csv(path: &Path, behavior: &str) -> Result<Vec<(f64, f64)>, String> {
+    let src = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut lines = src.lines().filter(|l| !l.trim().is_empty());
+    if lines.next().map(|h| h.trim().to_ascii_lowercase()) != Some("behavior,start_s,end_s".into()) {
+        return Err(format!("{}: header must be behavior,start_s,end_s", path.display()));
+    }
+    let mut out = vec![];
+    for (i, l) in lines.enumerate() {
+        let c: Vec<&str> = l.split(',').map(str::trim).collect();
+        let (a, b) = match c.as_slice() {
+            [lab, a, b] if *lab == behavior => (a.parse::<f64>(), b.parse::<f64>()),
+            [_, _, _] => continue,
+            _ => return Err(format!("row {}: expected behavior,start_s,end_s", i + 2)),
+        };
+        match (a, b) {
+            (Ok(a), Ok(b)) if a.is_finite() && b > a => out.push((a, b)),
+            _ => return Err(format!("row {}: start and end must be numbers with end > start", i + 2)),
+        }
+    }
+    if out.is_empty() {
+        return Err(format!("no '{behavior}' bouts in {}", path.display()));
+    }
+    Ok(out)
+}
+
+/// Train on labeled sessions, cross-validate, and package the model.
+pub fn train_model(sessions: &[(String, FrameFeatures, Vec<f64>, Vec<bool>)], behavior: &str, width: usize, params: Params) -> Result<(ModelFile, Evaluation), String> {
+    let names = sessions.first().ok_or("no sessions")?.1.names.clone();
+    let data: Vec<Labeled> = sessions.iter().map(|(_, f, t, y)| Labeled { x: &f.rows, t, y }).collect();
+    let ev = classify::cross_validate(&data, &names, behavior, params, None, 5)?;
+    let (tt, yy): (Vec<f64>, Vec<bool>) = sessions.iter().flat_map(|(_, _, t, y)| t.iter().copied().zip(y.iter().copied())).unzip();
+    let decode = Decode::from_labels(&tt, &yy);
+    let (x, y): (Vec<Vec<f32>>, Vec<bool>) = sessions.iter().flat_map(|(_, f, _, y)| f.rows.iter().cloned().zip(y.iter().copied())).unzip();
+    let model = classify::train(&x, &y, &names, behavior, params)?;
+    let hash = blake3::hash(serde_json::to_string(&model).map_err(|e| e.to_string())?.as_bytes()).to_hex()[..10].to_string();
+    let file = ModelFile {
+        schema: 1,
+        behavior: behavior.into(),
+        id: format!("simplefp-bt/{behavior}@{hash}"),
+        tracking_width: width,
+        decode,
+        trained_on: sessions.iter().map(|s| s.0.clone()).collect(),
+        evaluation: serde_json::to_value(&ev).map_err(|e| e.to_string())?,
+        model,
+    };
+    Ok((file, ev))
+}
+
+/// Proposals for one tracked session (review required before use).
+pub fn propose(m: &ModelFile, f: &FrameFeatures, t: &[f64]) -> Result<Vec<simplefp_video::Annotation>, String> {
+    if f.names != m.model.names {
+        return Err("feature set differs from the one the model was trained on (re-track with the model's tracking width or retrain)".into());
+    }
+    let p = m.model.predict(&f.rows);
+    Ok(classify::proposals(&classify::decode_bouts(&p, t, &m.decode), &m.behavior, &m.id))
+}

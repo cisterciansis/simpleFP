@@ -39,6 +39,8 @@ pub struct Detection {
     pub area: f64,
     /// Body axis angle (radians, image coordinates) from second moments.
     pub angle: f64,
+    /// Major/minor axis ratio (≥ 1): stretched (walking) vs hunched (grooming, freezing).
+    pub elongation: f64,
     /// Mean absolute luma change from the previous frame inside the ROI (gray levels).
     pub motion: f64,
     /// Fraction of ROI pixels that changed by more than the threshold since the previous frame.
@@ -169,7 +171,7 @@ impl Tracker {
         mask = morph(&morph(&mask, w, h, false), w, h, true); // opening: erode then dilate
         let blob = largest_blob(&mask, w, h);
         let min_area = (self.p.min_area_frac * roi_px as f64).max(4.0);
-        let (x, y, area, angle) = match blob {
+        let (x, y, area, angle, elongation) = match blob {
             Some(b) if b.len() as f64 >= min_area => {
                 let n = b.len() as f64;
                 let (mx, my) = (b.iter().map(|&i| (i % w) as f64).sum::<f64>() / n, b.iter().map(|&i| (i / w) as f64).sum::<f64>() / n);
@@ -180,9 +182,12 @@ impl Tracker {
                     syy += dy * dy;
                     sxy += dx * dy;
                 }
-                (mx, my, n, 0.5 * (2.0 * sxy).atan2(sxx - syy))
+                let (tr, det) = ((sxx + syy) / n, (sxx * syy - sxy * sxy) / (n * n));
+                let disc = (tr * tr / 4.0 - det).max(0.0).sqrt();
+                let (l1, l2) = (tr / 2.0 + disc, (tr / 2.0 - disc).max(1e-9));
+                (mx, my, n, 0.5 * (2.0 * sxy).atan2(sxx - syy), (l1 / l2).sqrt())
             }
-            _ => (f64::NAN, f64::NAN, 0.0, f64::NAN),
+            _ => (f64::NAN, f64::NAN, 0.0, f64::NAN, f64::NAN),
         };
         let (motion, motion_frac) = match &self.prev {
             Some(prev) => {
@@ -199,7 +204,7 @@ impl Tracker {
             None => (f64::NAN, f64::NAN),
         };
         self.prev = Some(frame.to_vec());
-        Ok(Detection { x, y, area, angle, motion, motion_frac })
+        Ok(Detection { x, y, area, angle, elongation, motion, motion_frac })
     }
 }
 
@@ -424,6 +429,7 @@ mod tests {
         assert!((d0.x - 40.0).abs() < 0.5 && (d0.y - 60.0).abs() < 0.5, "{d0:?}");
         assert!(d0.motion.is_nan());
         assert!(d0.angle.abs() < 0.1, "elongated along x: {}", d0.angle);
+        assert!((d0.elongation - 15.0 / 9.0).abs() < 0.1, "15×9 px body: {}", d0.elongation);
         let d1 = t.step(&frame(w, h, Some((40, 60)), true)).unwrap();
         assert_eq!(d1.motion, 0.0);
         let d2 = t.step(&frame(w, h, Some((60, 60)), true)).unwrap();

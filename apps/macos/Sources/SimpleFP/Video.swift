@@ -164,6 +164,11 @@ final class VideoModel {
     var roi: [Double]?
     var drawingROI = false
     var playableURL: URL?
+    /// Kept after tracking so detectors can be trained on / applied to this session.
+    var tracker: VideoTracker?
+    /// Keypoints from a pose model: bodyparts, flattened (x, y, conf) per frame, source width/height.
+    var pose: (bodyparts: [String], xyc: [Double], width: Int, height: Int)?
+    var poseBusy = false
 
     var ethogram: Ethogram
     var annotations: [AnnotationJSON] = []
@@ -172,6 +177,7 @@ final class VideoModel {
     var dirty = false
     private var observer: Any?
     private weak var rec: Recording?
+    var recording: Recording? { rec }
 
     init(rec: Recording, file: VideoFile, scorer: String) {
         self.rec = rec
@@ -314,6 +320,7 @@ final class VideoModel {
         let camera = camera, session = rec.session, roi = roi ?? []
         do {
             let tracker = try VideoTracker(width: UInt32(w), height: UInt32(h), darkAnimal: true)
+            self.tracker = tracker
             let summary = try await Task.detached(priority: .userInitiated) { () -> TrackSummary in
                 _ = try await FrameDecoder.luma(url: url, w: w, h: h, every: max(1, n / 100)) { try tracker.addSample(frame: Data($0)) }
                 _ = try tracker.begin(roi: roi)
@@ -352,7 +359,7 @@ final class VideoModel {
 struct BehaviorJSON: Codable, Hashable { let label: String; let key: String; let kind: String; let exclusive: String? }
 struct Ethogram: Codable, Hashable { let name: String; let behavior: [BehaviorJSON] }
 struct AnnotationJSON: Codable, Hashable {
-    let label: String; let startS: Double; let endS: Double?; let scorer: String; let source: String; let model: String?; let confidence: Double?; let review: String
+    var label: String; var startS: Double; var endS: Double?; var scorer: String; var source: String; var model: String?; var confidence: Double?; var review: String
     enum CodingKeys: String, CodingKey { case label, startS = "start_s", endS = "end_s", scorer, source, model, confidence, review }
 }
 struct AnnotationSetJSON: Codable {
@@ -397,9 +404,11 @@ struct VideoPane: View {
             }
             transport
             trackingBar
+            DetectorBar(model: model)
             ethogramBar
             if let w = model.warning { Label(w, systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange) }
             if let e = model.error { Label(e, systemImage: "xmark.octagon.fill").font(.caption).foregroundStyle(.red) }
+            ReviewQueue(model: model)
             annotationList
         }
         .focusable()
@@ -493,6 +502,12 @@ struct VideoPane: View {
                         HStack {
                             Text(a.label.replacingOccurrences(of: "_", with: " ")).font(.caption.weight(.medium))
                             Text(a.endS.map { String(format: "%.2f–%.2f s", a.startS, $0) } ?? String(format: "%.2f s", a.startS)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                            if a.source == "model" {
+                                Text(a.review).font(.caption2.weight(.medium))
+                                    .padding(.horizontal, 5).padding(.vertical, 1)
+                                    .background((a.review == "proposed" ? Color.orange : a.review == "rejected" ? Color.red : Color.green).opacity(0.18), in: Capsule())
+                                    .help("Detector \(a.model ?? ""): \(a.review == "proposed" ? "not used in analysis until reviewed" : a.review)")
+                            }
                             Spacer()
                             Button { model.seek(blockTime: a.startS) } label: { Image(systemName: "arrow.right.circle") }.buttonStyle(.borderless).help("Jump to")
                             Button { model.delete(a) } label: { Image(systemName: "trash") }.buttonStyle(.borderless).help("Delete")
@@ -528,6 +543,12 @@ private struct TrackOverlay: View {
                 }
                 if let a = dragStart, let b = dragNow {
                     ctx.stroke(Path(CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(a.x - b.x), height: abs(a.y - b.y))), with: .color(.yellow), lineWidth: 2)
+                }
+                if let p = model.pose {
+                    for (_, pt, c) in model.currentKeypoints where c > 0.2 {
+                        let q = CGPoint(x: r.minX + pt.x / Double(p.width) * r.width, y: r.minY + pt.y / Double(p.height) * r.height)
+                        ctx.fill(Path(ellipseIn: CGRect(x: q.x - 3.5, y: q.y - 3.5, width: 7, height: 7)), with: .color(.pink.opacity(0.4 + 0.6 * min(c, 1))))
+                    }
                 }
                 if let tr = model.track, model.frame < model.trackX.count, model.trackX[model.frame].isFinite {
                     let p = CGPoint(x: r.minX + model.trackX[model.frame] / Double(tr.width) * r.width, y: r.minY + model.trackY[model.frame] / Double(tr.height) * r.height)

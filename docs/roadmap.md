@@ -65,10 +65,13 @@ reproducible from a preset and a manifest.
 - [x] Lab Assistant over any OpenAI-compatible provider (local MLX/Ollama, Chutes TEE, Tinfoil); validated one-click
   parameter suggestions
 - [x] Easy mode parameters + Code (TOML) + CLI `--set`, all through one validator
+- [x] Core ML pose runner (bring your own model + sidecar), pose features, DLC-style export
+- [x] Behavior classifier (Rust gradient-boosted trees) trained on the lab's scoring, with cross-validated agreement
+  and a review queue in the app; CLI `classify-train` / `classify-predict`
 - Next:
-  - Core ML pose runner (permissive models; SuperAnimal as a user download);
-  - in-app behavior classifier (Create ML) trained on scored sessions;
-  - proposal review queue;
+  - multi-session training from the app (cohort-wide detectors);
+  - learning-curve view (how many bouts are enough);
+  - packaged permissive pose model (RTMPose/ViTPose → Core ML);
   - VLM triage;
   - two-animal identity tracking;
   - Tinfoil/Chutes attestation verification

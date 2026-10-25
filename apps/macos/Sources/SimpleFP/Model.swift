@@ -76,6 +76,13 @@ final class Recording: Identifiable {
         // Dev/automation flags: `--track` runs tracking on open, `--seek=<s>` moves the playhead.
         let args = CommandLine.arguments
         if args.contains("--track") { await v.analyzeVideo() }
+        if let m = args.first(where: { $0.hasPrefix("--detect=") }), let tracker = v.tracker,
+           let json = try? String(contentsOfFile: String(m.dropFirst(9)), encoding: .utf8),
+           let out = try? proposeBehavior(modelJson: json, session: session, tracker: tracker, camera: v.camera),
+           let props = try? JSONDecoder().decode([AnnotationJSON].self, from: Data(out.utf8)) {
+            v.annotations += props
+        }
+        if let m = args.first(where: { $0.hasPrefix("--pose=") }) { await v.runPose(URL(fileURLWithPath: String(m.dropFirst(7)))) }
         if let s = args.first(where: { $0.hasPrefix("--seek=") }), let t = Double(s.dropFirst(7)) { v.seek(blockTime: t) }
     }
 

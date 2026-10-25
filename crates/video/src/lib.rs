@@ -11,9 +11,23 @@
 //!   validate AI or second-rater scoring against a human reference;
 //! - pose: DeepLabCut CSV import and derived kinematics (speed, distance to ROI).
 
+pub mod classify;
+pub mod pose;
 pub mod track;
 
 use serde::{Deserialize, Serialize};
+
+/// Deterministic uniform [0, 1) generator (SplitMix64) for reproducible training.
+pub(crate) fn rng(seed: u64) -> impl FnMut() -> f64 {
+    let mut s = seed;
+    move || {
+        s = s.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = s;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        ((z ^ (z >> 31)) >> 11) as f64 / (1u64 << 53) as f64
+    }
+}
 
 /// Maps frames to block time. Built from one timestamp per frame when available
 /// (TDT camera epocs), otherwise from a nominal rate plus an offset.

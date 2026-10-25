@@ -68,6 +68,34 @@ enum Cmd {
         #[arg(short, long)]
         out: Option<PathBuf>,
     },
+    /// Train a behavior detector from human-scored bouts and report cross-validated agreement.
+    ClassifyTrain {
+        /// Blocks to learn from (each needs bouts in --labels).
+        #[arg(required = true)]
+        blocks: Vec<PathBuf>,
+        /// CSV `behavior,start_s,end_s` per block, in the same order as the blocks.
+        #[arg(long, required = true, num_args = 1..)]
+        labels: Vec<PathBuf>,
+        #[arg(long)]
+        behavior: String,
+        #[arg(long, default_value_t = 320)]
+        width: usize,
+        /// Arena ROI fractions x0,y0,x1,y1 (applied to every block); default auto.
+        #[arg(long, value_delimiter = ',')]
+        roi: Option<Vec<f64>>,
+        #[arg(short, long)]
+        out: PathBuf,
+    },
+    /// Propose bouts in a block with a trained model (written for review, never auto-accepted).
+    ClassifyPredict {
+        block: PathBuf,
+        #[arg(long)]
+        model: PathBuf,
+        #[arg(long, value_delimiter = ',')]
+        roi: Option<Vec<f64>>,
+        #[arg(short, long)]
+        out: Option<PathBuf>,
+    },
     /// Write a synthetic two-group, two-condition cohort with known effects.
     DemoCohort { dir: PathBuf },
     /// List built-in presets, or print one as TOML.
@@ -176,6 +204,40 @@ fn run(cli: Cli) -> Result<(), String> {
             }
             println!("  → {}", out.display());
         }
+        Cmd::ClassifyTrain { blocks, labels, behavior, width, roi, out } => {
+            if blocks.len() != labels.len() {
+                return Err("give one --labels file per block".into());
+            }
+            let mut sessions = vec![];
+            for (b, l) in blocks.iter().zip(&labels) {
+                let (rec, r) = track(b, width, roi.as_deref())?;
+                let fps = rec.frame_clock("Cam1")?.fps;
+                let f = simplefp::behavior::session_features(&r, fps, width)?;
+                let y = simplefp::behavior::labels(&r.features.t, &simplefp::behavior::read_bouts_csv(l, &behavior)?);
+                sessions.push((b.file_name().map_or(String::new(), |n| n.to_string_lossy().into_owned()), f, r.features.t.clone(), y));
+            }
+            let (file, ev) = simplefp::behavior::train_model(&sessions, &behavior, width, Default::default())?;
+            std::fs::write(&out, serde_json::to_string_pretty(&file).map_err(|e| e.to_string())?).map_err(|e| format!("{}: {e}", out.display()))?;
+            println!("{} · trained on {} session(s), {} frames ({} positive)", file.id, sessions.len(), ev.frames, ev.positive_frames);
+            println!("  cross-validation ({}, {} folds): frame κ {:.3} · PABAK {:.3} · frame F1 {:.3} · bout F1 {:.3} (tIoU ≥ 0.5; {} TP / {} FP / {} FN) · median onset error {:.2} s",
+                ev.scheme, ev.folds, ev.frame.kappa, ev.frame.pabak, ev.frame.f1, ev.bout.f1, ev.bout.true_positive, ev.bout.false_positive, ev.bout.false_negative, ev.bout.median_offset_s);
+            println!("  → {}", out.display());
+        }
+        Cmd::ClassifyPredict { block, model, roi, out } => {
+            let file: simplefp::behavior::ModelFile = serde_json::from_str(&std::fs::read_to_string(&model).map_err(|e| format!("{}: {e}", model.display()))?).map_err(|e| format!("{}: {e}", model.display()))?;
+            let (rec, r) = track(&block, file.tracking_width, roi.as_deref())?;
+            let f = simplefp::behavior::session_features(&r, rec.frame_clock("Cam1")?.fps, file.tracking_width)?;
+            let props = simplefp::behavior::propose(&file, &f, &r.features.t)?;
+            let out = out.unwrap_or_else(|| block.join("simplefp").join("proposals.json"));
+            if let Some(d) = out.parent() {
+                std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
+            }
+            std::fs::write(&out, serde_json::to_string_pretty(&props).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+            for a in &props {
+                println!("  {} {:.1}–{:.1} s  (confidence {:.2}, proposed)", a.label, a.start_s, a.end_s.unwrap_or(a.start_s), a.confidence.unwrap_or(0.0));
+            }
+            println!("{} proposals by {} → {}", props.len(), file.id, out.display());
+        }
         Cmd::DemoCohort { dir } => {
             let m = simplefp::write_demo_cohort(&dir)?;
             println!("wrote 16 blocks and {}", m.display());
@@ -199,6 +261,23 @@ fn run(cli: Cli) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// Track a block's Cam1 video (ROI as frame fractions, or auto).
+fn track(block: &Path, width: usize, roi: Option<&[f64]>) -> Result<(simplefp::Recording, simplefp::behavior::TrackResult), String> {
+    let p = preset::builtin("grab-ach3.0-tdt").unwrap();
+    let rec = simplefp::load(block, &p)?;
+    let (w, h) = (width.clamp(64, 640), (width.clamp(64, 640) * 3 / 4) & !1);
+    let roi = match roi {
+        Some(&[x0, y0, x1, y1]) if (0.0..1.0).contains(&x0) && x0 < x1 && x1 <= 1.0 && (0.0..1.0).contains(&y0) && y0 < y1 && y1 <= 1.0 => {
+            Some([(x0 * w as f64) as usize, (y0 * h as f64) as usize, (x1 * w as f64).ceil() as usize, (y1 * h as f64).ceil() as usize])
+        }
+        Some(_) => return Err("--roi needs four fractions 0 ≤ x0 < x1 ≤ 1, 0 ≤ y0 < y1 ≤ 1".into()),
+        None => None,
+    };
+    let params = simplefp::video::track::TrackParams { roi, ..Default::default() };
+    let r = simplefp::behavior::track_block(&rec, "Cam1", width, params, None, 1.0)?;
+    Ok((rec, r))
 }
 
 fn parse_set(s: &str) -> Result<(String, String), String> {
