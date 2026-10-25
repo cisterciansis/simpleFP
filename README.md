@@ -10,6 +10,10 @@ Built first for **GRAB-ACh3.0** acetylcholine imaging and designed to grow into 
 - **Event statistics**: peri-event epochs, bootstrap CIs with the consecutive-threshold criterion, per-trial metrics,
   control-channel response check, long-format export for functional mixed models (fastFMM).
 - **Declarative presets**: versioned TOML recipes with inheritance and strict validation ([docs/presets.md](docs/presets.md)).
+- **Group analysis**: cohort manifests with the animal as the unit of inference. Bootstrap CIs across animals,
+  between-group and within-subject contrasts, exact permutation tests, hierarchical bootstrap, Benjamini–Hochberg.
+- **Lab store**: animals, cages, breeding, surgeries (virus, coordinates, fiber), sessions, exclusions and cohorts in
+  one local SQLite file with a tamper-evident audit log. Frozen colony cohorts feed group analysis directly.
 - **Provenance**: every run writes `run.json` with the resolved preset, its hash, engine version and BLAKE3 digests of the inputs.
 - **Speed**: a 2-hour, 1 kHz, two-channel recording with 200 events and 10,000 bootstrap resamples analyzes in about 0.23 s on an M5 Pro.
 
@@ -63,15 +67,31 @@ Drop a block or a tank folder onto the window, or choose **File ▸ Open Demo Re
 | `flmm_long.csv` | long format for `fastFMM::fui()` |
 | `run.json` | resolved preset + hash, QC, warnings, engine version, input digests |
 
-Single-recording statistics treat trials as the unit and are **descriptive**. Group inference needs per-animal
-averages (methods-spec §7). Cohort analysis is next on the roadmap.
+Single-recording statistics treat trials as the unit and are **descriptive**. For group inference, use a cohort:
+
+```bash
+./target/release/simplefp demo-cohort /tmp/cohort
+```
+
+```bash
+./target/release/simplefp cohort /tmp/cohort/cohort.toml
+```
+
+The cohort output (`simplefp-cohort/`) contains:
+- `animals.csv`, `animal_curves.csv`: per-animal means;
+- `group_curves.csv`, `contrast_curves.csv`: waveforms with CIs;
+- `metric_summaries.csv`, `metric_tests.csv`: metric estimates with CIs, p and BH q;
+- `flmm_long.csv`: trial-level data with animal, session and group columns;
+- `cohort.json`: provenance;
+- `sessions/`: every session's own export.
 
 ## Layout
 
 ```
 crates/tdt      TDT block reader (no dependencies)
 crates/core     DSP, fitting, pipeline, events/statistics, presets, simulator
-crates/engine   I/O layer shared by all front-ends: load → analyze → export
+crates/engine   I/O layer shared by all front-ends: load → analyze → export, cohorts
+crates/lab      lab store (SQLite): colony, surgeries, sessions, cohorts, audit
 crates/cli      `simplefp` command-line tool
 crates/ffi      UniFFI bindings for Swift
 apps/macos      SwiftUI app

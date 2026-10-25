@@ -13,12 +13,14 @@ reproducible from a preset and a manifest.
 - [x] Ground-truth simulator and validation suite
 
 ## v0.2: cohorts and correct group inference
-- Cohort model: animal, session, condition and group metadata (sidecar `session.toml` next to each block)
-- Two-stage inference with the animal as the unit:
+- [x] Cohort manifests (`cohort.toml`): sessions with animal/group/condition, exclusions with reasons, contrasts
+- [x] Two-stage inference with the animal as the unit:
   - per-animal mean waveforms, then group bootstrap CI;
   - between-group CI and permutation tests;
   - hierarchical bootstrap for metrics;
   - Benjamini–Hochberg correction across events and metrics
+- [x] Mac cohort view: group bands, contrast curves, estimation plot, tests table; build a cohort from open recordings
+- Sidecar `session.toml` next to each block (portable session metadata)
 - Invalid-sample masking (dropouts, flat runs, ADC saturation with a hardware `adc_max`) that drops overlapping epochs
 - Spontaneous transient detection (GuPPy two-threshold MAD; prominence method)
 - Event overlap policy (`exclude_if_preceded_s`) and bout detection for feeding
@@ -41,10 +43,21 @@ reproducible from a preset and a manifest.
 - AI-assisted scoring: vision models propose events, the user confirms; inter-rater agreement reported
 - Continuous-behavior regression (speed, distance-to-food) against ΔF/F
 
-## v0.5: lab management
-- Animal and cage tracking (cage cards, genotypes, surgeries, virus, fiber placement, histology verification)
-- Experiment journal linked to sessions, with cohort selection feeding straight into analysis
-- Optional sync (CloudKit for Apple-only labs; a self-hosted server later)
+## v0.5: lab management (design: docs/research/colony-management.md)
+- [x] Local SQLite store, hash-chained audit, interval cage history, atomic weaning and surgery records
+- [x] Protocol-expiry guard, derived tasks (wean, post-op, protocol, capacity, genotype), animal timeline, notes
+- [x] Cohorts from the colony: freeze with members hash, blinding codes, exclusions → analysis manifest
+- [x] Mac: animals table + timeline, cage board with drag-to-move, QR cage cards (PDF), tasks
+- Next:
+  - wean wizard UI;
+  - breeding setup UI;
+  - ⌘K command bar (`mv A-12 C-031`) and barcode-scanner flows;
+  - keyboard census;
+  - histology pass with atlas plot;
+  - CSV import with dry run;
+  - pedigree view;
+  - surgery templates
+- Later: iPhone/iPad companion with camera QR, sync with real roles (CloudKit or self-hosted), welfare score sheets
 
 ## Cross-platform
 - GPUI shell for Linux/Windows on the same `engine` crate once GPUI has stable releases and accessibility

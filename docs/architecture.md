@@ -5,9 +5,10 @@
             │  apps/macos (SwiftUI)   crates/cli  │   future: GPUI (Linux/Windows), Luau scripts, web
             └──────┬──────────────────────┬───────┘
                    │ UniFFI (crates/ffi)  │
-            ┌──────▼──────────────────────▼───────┐
-            │ crates/engine   load · analyze · export · provenance
-            └──────┬──────────────────────┬───────┘
+            ┌──────▼──────────────────────▼───────┐       ┌────────────────────┐
+            │ crates/engine   load · analyze · export · cohort ◀── │ crates/lab (SQLite) │
+            └──────┬──────────────────────┬───────┘       │ colony · audit     │
+                   │                      │               └────────────────────┘
           ┌────────▼───────┐      ┌───────▼────────┐
           │ crates/tdt     │      │ crates/core    │  dsp · fit · stats · pipeline
           │ TSQ/TEV/SEV    │      │ events · preset · analysis · sim
@@ -40,6 +41,19 @@
 | Plots: SwiftUI `Canvas` + engine envelopes | Swift Charts takes about 4 s per 10⁶ points; Canvas on about 3k envelope points is instant | Metal if we need 120 Hz pan on many channels |
 | CSV + JSON outputs | Universally readable; FLMM-ready long format | Parquet/NWB when cohort pipelines need them |
 | Luau (`mlua`) for user scripts | Fastest embeddable sandboxed option measured; agents write Lua well (roadmap) | — |
+
+## Lab store
+
+- One SQLite file per lab (`~/Library/Application Support/SimpleFP/lab.sqlite`; `SIMPLEFP_LAB` overrides it).
+  STRICT tables, WAL mode and foreign keys on. The schema in `crates/lab/src/schema.sql` is the data model.
+- **Single write path.** Every insert and update goes through `simplefp_lab::Lab`, which validates the change and
+  appends an audit row in the same transaction. Audit rows form a BLAKE3 hash chain (`verify_audit`), and SQL triggers
+  block edits and deletes.
+- **History is rows, not overwrites.** Cage location is an interval table with at most one open stay per animal (a
+  partial unique index). Genotype calls are superseded, not edited. Exclusions are revoked, not deleted.
+- Rows cross the FFI as JSON objects keyed by column name. Column and table names are allowlisted against the schema.
+- A colony cohort freezes into a members hash, then exports a `cohort.toml` that the analysis engine runs. While a
+  cohort is blinded, its groups are written as blind codes.
 
 ## Adding a method
 
