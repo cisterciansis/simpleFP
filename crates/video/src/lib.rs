@@ -11,6 +11,8 @@
 //!   validate AI or second-rater scoring against a human reference;
 //! - pose: DeepLabCut CSV import and derived kinematics (speed, distance to ROI).
 
+pub mod track;
+
 use serde::{Deserialize, Serialize};
 
 /// Maps frames to block time. Built from one timestamp per frame when available

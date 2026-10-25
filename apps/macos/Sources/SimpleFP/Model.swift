@@ -26,6 +26,8 @@ final class Recording: Identifiable {
     var cursor: Double?
     var video: VideoModel?
     var status: String?
+    var paramError: String?
+    var rerun: Task<Void, Never>?
 
     init(url: URL, preset: PresetInfo) throws {
         self.url = url

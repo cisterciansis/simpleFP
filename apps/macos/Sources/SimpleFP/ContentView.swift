@@ -44,7 +44,7 @@ struct ContentView: View {
             Group {
                 if let rec = library.selected { InspectorView(rec: rec) } else if let doc = library.selectedCohort { CohortInspector(doc: doc) } else { Color.clear }
             }
-            .inspectorColumnWidth(min: 260, ideal: 300, max: 380)
+            .inspectorColumnWidth(min: 240, ideal: 300, max: 380)
         }
         .dropDestination(for: URL.self) { urls, _ in
             Task { for u in urls { await library.open(u) } }
@@ -61,6 +61,7 @@ struct ContentView: View {
             // `SimpleFP <block>…` or `SimpleFP --demo` (e.g. via `open -a SimpleFP --args …`).
             for arg in CommandLine.arguments.dropFirst() {
                 if arg == "--seed-demo-lab", lab.animals.isEmpty { lab.seedDemo() }
+                if arg == "--inspector" { columns = .detailOnly; showInspector = true }
                 if arg == "--lab" { library.selection = LabModel.cagesID } else if arg == "--animals" { library.selection = LabModel.animalsID } else if arg == "--tasks" { library.selection = LabModel.tasksID } else if arg == "--demo" { await library.openDemo() } else if arg == "--demo-cohort" { await library.openDemoCohort() } else if FileManager.default.fileExists(atPath: arg) { await library.open(URL(fileURLWithPath: arg)) }
             }
         }
@@ -366,13 +367,18 @@ private struct EventPanel: View {
                         .help("Bootstrap CI across trials (expanded by √(n/(n−1))), runs ≥ 1/low-pass seconds. Trials of one recording: descriptive, not group inference.")
                     }
                 }
-                HStack(spacing: 12) {
-                    PethPlot(ev: ev, color: Palette.events(idx))
-                        .frame(minWidth: 100, maxWidth: .infinity)
-                    EventHeatmap(ev: ev)
-                        .frame(minWidth: 100, maxWidth: .infinity)
-                    MetricsTable(ev: ev)
-                        .frame(minWidth: 180, idealWidth: 340, maxWidth: 420)
+                // Reflow for narrow windows: drop the table, then the heatmap.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) {
+                        PethPlot(ev: ev, color: Palette.events(idx)).frame(minWidth: 200, maxWidth: .infinity)
+                        EventHeatmap(ev: ev).frame(minWidth: 200, maxWidth: .infinity)
+                        MetricsTable(ev: ev).frame(minWidth: 300, idealWidth: 360, maxWidth: 420)
+                    }
+                    HStack(spacing: 12) {
+                        PethPlot(ev: ev, color: Palette.events(idx)).frame(minWidth: 180, maxWidth: .infinity)
+                        EventHeatmap(ev: ev).frame(minWidth: 180, maxWidth: .infinity)
+                    }
+                    PethPlot(ev: ev, color: Palette.events(idx)).frame(minWidth: 120, maxWidth: .infinity)
                 }
             }
             .padding(12)
@@ -408,7 +414,6 @@ private struct MetricsTable: View {
 private struct InspectorView: View {
     @Environment(Library.self) private var library
     let rec: Recording
-    @State private var editing = false
 
     var body: some View {
         Form {
@@ -419,8 +424,8 @@ private struct InspectorView: View {
                     ForEach(library.presets, id: \.id) { Text($0.name).tag($0.id) }
                 }
                 Text(rec.preset.description).font(.callout).foregroundStyle(.secondary)
-                Button("Edit Parameters…") { editing = true }
             }
+            EasyParameters(rec: rec)
             if let qc = rec.results?.qc {
                 Section("Quality") {
                     LabeledContent("Analyzed", value: "\(formatClock(qc.analyzedFromS)) – \(formatClock(qc.analyzedToS))")
@@ -449,11 +454,10 @@ private struct InspectorView: View {
             }
         }
         .formStyle(.grouped)
-        .sheet(isPresented: $editing) { PresetEditor(rec: rec) }
     }
 }
 
-private struct PresetEditor: View {
+struct PresetEditor: View {
     @Environment(\.dismiss) private var dismiss
     let rec: Recording
     @State private var text = ""

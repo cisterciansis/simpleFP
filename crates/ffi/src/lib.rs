@@ -83,6 +83,19 @@ pub struct ClockInfo {
     pub hash: String,
 }
 
+/// Set one parameter on a preset (dotted path, TOML value) and return the validated TOML.
+#[uniffi::export]
+pub fn preset_set(toml_src: String, key: String, value: String) -> R<String> {
+    let p = parse_preset(&toml_src)?;
+    Ok(preset::with_overrides(&p, &[(key, value)])?.to_toml())
+}
+
+/// A preset as JSON (for building controls from its current values).
+#[uniffi::export]
+pub fn preset_json(toml_src: String) -> R<String> {
+    Ok(serde_json::to_string(&parse_preset(&toml_src)?).unwrap_or_default())
+}
+
 /// Default ethogram (feeding) as JSON.
 #[uniffi::export]
 pub fn default_ethogram() -> String {

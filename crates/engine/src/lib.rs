@@ -11,10 +11,12 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+pub mod behavior;
 pub mod cohort;
 
 pub use simplefp_core as core;
 pub use simplefp_tdt as tdt;
+pub use simplefp_video as video;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 

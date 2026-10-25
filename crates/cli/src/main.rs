@@ -34,6 +34,9 @@ enum Cmd {
         /// Output directory (default: <block>/simplefp).
         #[arg(short, long)]
         out: Option<PathBuf>,
+        /// Override a preset parameter (repeatable), e.g. --set preprocess.lowpass_hz=6
+        #[arg(long = "set", value_parser = parse_set)]
+        sets: Vec<(String, String)>,
     },
     /// Group analysis of many recordings from a cohort manifest (animal = unit).
     Cohort {
@@ -42,10 +45,38 @@ enum Cmd {
         #[arg(short, long)]
         out: Option<PathBuf>,
     },
+    /// Track the animal in a block's camera video (classical, no model; needs ffmpeg).
+    Track {
+        block: PathBuf,
+        #[arg(long, default_value = "Cam1")]
+        camera: String,
+        /// Analysis width in pixels (height keeps 4:3).
+        #[arg(long, default_value_t = 160)]
+        width: usize,
+        /// Immobility threshold on motion energy (gray levels/frame); default: suggested from the data.
+        #[arg(long)]
+        immobility_threshold: Option<f64>,
+        /// Minimum immobility bout (s).
+        #[arg(long, default_value_t = 1.0)]
+        min_immobile_s: f64,
+        /// The animal is lighter than the background.
+        #[arg(long)]
+        light_animal: bool,
+        /// Arena region as fractions of the frame: x0,y0,x1,y1 (e.g. 0.42,0.42,0.78,0.92). Default: auto-detect.
+        #[arg(long, value_delimiter = ',')]
+        roi: Option<Vec<f64>>,
+        #[arg(short, long)]
+        out: Option<PathBuf>,
+    },
     /// Write a synthetic two-group, two-condition cohort with known effects.
     DemoCohort { dir: PathBuf },
     /// List built-in presets, or print one as TOML.
-    Presets { id: Option<String> },
+    Presets {
+        id: Option<String>,
+        /// Override a parameter and print the resolved, validated preset (repeatable).
+        #[arg(long = "set", value_parser = parse_set)]
+        sets: Vec<(String, String)>,
+    },
     /// Write a synthetic TDT block with known ground truth.
     Demo {
         dir: PathBuf,
@@ -68,8 +99,8 @@ fn run(cli: Cli) -> Result<(), String> {
                 println!("  epoc   {:<6} {:>5} events  {first}", e.name, e.onset.len());
             }
         }
-        Cmd::Run { block, preset, epoc, epoc_offset, events, out } => {
-            let p = simplefp::load_preset(&preset, Path::new("."))?;
+        Cmd::Run { block, preset, epoc, epoc_offset, events, out, sets } => {
+            let p = preset::with_overrides(&simplefp::load_preset(&preset, Path::new("."))?, &sets)?;
             let rec = simplefp::load(&block, &p)?;
             let mut sources: Vec<EventSource> = epoc.into_iter().map(EventSource::Epoc).collect();
             sources.extend(epoc_offset.into_iter().map(EventSource::EpocOffset));
@@ -121,17 +152,44 @@ fn run(cli: Cli) -> Result<(), String> {
             }
             println!("  → {}", out.display());
         }
+        Cmd::Track { block, camera, width, immobility_threshold, min_immobile_s, light_animal, roi, out } => {
+            let p = simplefp::core::preset::builtin("grab-ach3.0-tdt").unwrap();
+            let rec = simplefp::load(&block, &p)?;
+            let (w, h) = (width.clamp(64, 640), (width.clamp(64, 640) * 3 / 4) & !1);
+            let roi = match roi.as_deref() {
+                Some(&[x0, y0, x1, y1]) if (0.0..=1.0).contains(&x0) && (0.0..=1.0).contains(&y1) && x0 < x1 && y0 < y1 && x1 <= 1.0 && y0 >= 0.0 => {
+                    Some([(x0 * w as f64) as usize, (y0 * h as f64) as usize, (x1 * w as f64).ceil() as usize, (y1 * h as f64).ceil() as usize])
+                }
+                Some(_) => return Err("--roi needs four fractions 0 ≤ x0 < x1 ≤ 1, 0 ≤ y0 < y1 ≤ 1".into()),
+                None => None,
+            };
+            let params = simplefp::video::track::TrackParams { dark_animal: !light_animal, roi, ..Default::default() };
+            let r = simplefp::behavior::track_block(&rec, &camera, width, params, immobility_threshold, min_immobile_s)?;
+            let out = out.unwrap_or_else(|| block.join("simplefp").join("behavior"));
+            simplefp::behavior::export_behavior(&r, &out)?;
+            let f = &r.features;
+            let imm = f.immobile.iter().filter(|&&b| b).count() as f64 / f.t.len().max(1) as f64;
+            println!("arena ROI {:?} at {width} px wide", r.roi);
+            println!("{} frames · {:.1} % lost · immobile {:.1} % of the time in {} bouts (threshold {:.2})", r.frames, 100.0 * f.lost_frac, 100.0 * imm, f.bouts.len(), f.immobility_threshold);
+            if let Some(w) = r.warning {
+                println!("  warning: {w}");
+            }
+            println!("  → {}", out.display());
+        }
         Cmd::DemoCohort { dir } => {
             let m = simplefp::write_demo_cohort(&dir)?;
             println!("wrote 16 blocks and {}", m.display());
         }
-        Cmd::Presets { id: None } => {
+        Cmd::Presets { id: Some(id), sets } if !sets.is_empty() => {
+            print!("{}", preset::with_overrides(&simplefp::load_preset(&id, Path::new("."))?, &sets)?.to_toml());
+        }
+        Cmd::Presets { id: None, .. } => {
             for (id, _) in preset::BUILTIN {
                 let p = preset::builtin(id).unwrap();
                 println!("{id:<18} {}  — {}", p.name, p.description);
             }
         }
-        Cmd::Presets { id: Some(id) } => {
+        Cmd::Presets { id: Some(id), .. } => {
             let src = preset::BUILTIN.iter().find(|(i, _)| *i == id).ok_or_else(|| format!("no built-in preset '{id}'"))?.1;
             print!("{src}");
         }
@@ -141,6 +199,11 @@ fn run(cli: Cli) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+fn parse_set(s: &str) -> Result<(String, String), String> {
+    let (k, v) = s.split_once('=').ok_or("expected key=value, e.g. preprocess.lowpass_hz=6")?;
+    Ok((k.trim().to_string(), v.trim().to_string()))
 }
 
 fn main() -> ExitCode {

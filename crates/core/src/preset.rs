@@ -235,6 +235,31 @@ pub fn parse(src: &str, library: &BTreeMap<String, String>) -> Result<Preset, St
     Ok(p)
 }
 
+/// Apply `key = value` overrides (dotted paths, values in TOML syntax; bare words are
+/// strings), e.g. `preprocess.lowpass_hz=6`, `bleach.method=window`. The result is
+/// re-validated, so an override can never produce an invalid preset. Switching a
+/// method drops that table's old method-specific keys.
+pub fn with_overrides(p: &Preset, sets: &[(String, String)]) -> Result<Preset, String> {
+    let mut table: toml::Table = toml::Value::try_from(p).map_err(|e| e.to_string())?.as_table().cloned().unwrap_or_default();
+    for (key, raw) in sets {
+        let parts: Vec<&str> = key.split('.').collect();
+        if parts.iter().any(|s| s.is_empty() || !s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')) {
+            return Err(format!("'{key}' is not a valid parameter path"));
+        }
+        let value: toml::Value = format!("v = {raw}").parse::<toml::Table>().ok().and_then(|mut t| t.remove("v")).unwrap_or_else(|| toml::Value::String(raw.clone()));
+        let mut over = toml::Table::new();
+        let mut cur = &mut over;
+        for part in &parts[..parts.len() - 1] {
+            cur = cur.entry(part.to_string()).or_insert_with(|| toml::Value::Table(toml::Table::new())).as_table_mut().unwrap();
+        }
+        cur.insert(parts[parts.len() - 1].to_string(), value);
+        merge(&mut table, over);
+    }
+    let out: Preset = toml::Value::Table(table).try_into().map_err(|e: toml::de::Error| e.to_string())?;
+    out.validate()?;
+    Ok(out)
+}
+
 pub fn builtin(id: &str) -> Option<Preset> {
     BUILTIN.iter().find(|(i, _)| *i == id).map(|(_, s)| parse(s, &BTreeMap::new()).expect("built-in preset is valid"))
 }
@@ -273,6 +298,19 @@ mod tests {
         // Same method: keys still merge (override one, inherit the rest).
         let src = "extends = \"grab-ach3.0-tdt\"\nid = \"t\"\nname = \"t\"\n[motion]\nmethod = \"irls\"\ntuning = 3.0\n";
         assert_eq!(parse(src, &BTreeMap::new()).unwrap().motion, MotionMethod::Irls { tuning: 3.0 });
+    }
+
+    #[test]
+    fn overrides_are_validated() {
+        let p = builtin("grab-ach3.0-tdt").unwrap();
+        let set = |k: &str, v: &str| with_overrides(&p, &[(k.into(), v.into())]);
+        assert_eq!(set("preprocess.lowpass_hz", "6").unwrap().preprocess.lowpass_hz, Some(6.0));
+        assert!(set("preprocess.lowpass_hz", "50").is_err(), "above post-decimation Nyquist");
+        assert!(set("preprocess.lowpas_hz", "6").is_err(), "typo rejected");
+        let w = with_overrides(&p, &[("bleach.method".into(), "window".into()), ("bleach.start_s".into(), "30".into()), ("bleach.end_s".into(), "200".into())]).unwrap();
+        assert_eq!(w.bleach, BleachMethod::Window { start_s: 30.0, end_s: 200.0 });
+        assert!(set("events.baseline_window", "[-1.0, 0.0]").is_err(), "baseline must span ≥ 2 s");
+        assert!(set("a..b", "1").is_err());
     }
 
     #[test]
