@@ -827,7 +827,7 @@ impl VideoTracker {
     /// detectors trained from now on also use pose features.
     pub fn set_pose(&self, bodyparts: Vec<String>, xyc: Vec<f64>, source_width: u32, source_height: u32) -> R<()> {
         let k = bodyparts.len();
-        if k == 0 || xyc.len() % (3 * k) != 0 || source_width == 0 || source_height == 0 {
+        if k == 0 || !xyc.len().is_multiple_of(3 * k) || source_width == 0 || source_height == 0 {
             return Err(FpError::from("keypoints do not match the bodyparts".to_string()));
         }
         let (sx, sy) = (self.w as f64 / source_width as f64, self.h as f64 / source_height as f64);
@@ -891,7 +891,7 @@ pub fn decode_pose_heatmaps(data: Vec<u8>, k: u32, h: u32, w: u32, channels_last
 #[uniffi::export]
 pub fn pose_csv(bodyparts: Vec<String>, xyc: Vec<f64>, scorer: String) -> R<String> {
     let k = bodyparts.len();
-    if k == 0 || xyc.len() % (3 * k) != 0 {
+    if k == 0 || !xyc.len().is_multiple_of(3 * k) {
         return Err(FpError::from("keypoint array does not match the bodyparts".to_string()));
     }
     let n = xyc.len() / (3 * k);
@@ -917,7 +917,7 @@ pub fn train_behavior(sessions: Vec<TrainingSession>, behavior: String) -> R<Str
     let mut width = 0;
     for s in &sessions {
         let (f, t) = s.tracker.frame_features(&s.session, &s.camera)?;
-        let bouts: Vec<(f64, f64)> = s.bouts.chunks_exact(2).map(|c| (c[0], c[1])).collect();
+        let bouts: Vec<(f64, f64)> = s.bouts.as_chunks::<2>().0.iter().map(|c| (c[0], c[1])).collect();
         width = s.tracker.w;
         data.push((s.name.clone(), f, t.clone(), simplefp::behavior::labels(&t, &bouts)));
     }
