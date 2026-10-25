@@ -70,7 +70,7 @@ final class Recording: Identifiable {
     /// Open the first camera video stored with the block, if any.
     func loadVideo() async {
         guard video == nil, let file = session.videos().first else { return }
-        let v = VideoModel(rec: self, file: file, scorer: UserDefaults.standard.string(forKey: "labInitials") ?? NSUserName().prefix(2).uppercased())
+        let v = VideoModel(rec: self, file: file, scorer: UserDefaults.standard.string(forKey: "labInitials").flatMap { $0.isEmpty ? nil : $0 } ?? NSUserName().prefix(2).uppercased())
         video = v
         await v.load()
         // Dev/automation flags: `--track` runs tracking on open, `--seek=<s>` moves the playhead.

@@ -379,6 +379,9 @@ private struct PlayerLayerView: NSViewRepresentable {
         return v
     }
     func updateNSView(_ v: AVPlayerView, context: Context) { v.player = player }
+    /// Detach before the view goes away: AVKit's async player inspection otherwise races
+    /// the view's teardown and aborts in KVO (seen when switching recordings quickly).
+    static func dismantleNSView(_ v: AVPlayerView, coordinator: ()) { v.player = nil }
 }
 
 struct VideoPane: View {

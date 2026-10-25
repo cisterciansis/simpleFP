@@ -58,11 +58,12 @@ struct ContentView: View {
         }
         .task {
             lab.open()
-            // `SimpleFP <block>…` or `SimpleFP --demo` (e.g. via `open -a SimpleFP --args …`).
+            // `SimpleFP --open=<block>…` or `SimpleFP --demo` (e.g. via `open -a SimpleFP --args …`). Bare paths
+            // would make AppKit treat them as launch documents and skip the main window.
             for arg in CommandLine.arguments.dropFirst() {
                 if arg == "--seed-demo-lab", lab.animals.isEmpty { lab.seedDemo() }
                 if arg == "--inspector" { columns = .detailOnly; showInspector = true }
-                if arg == "--lab" { library.selection = LabModel.cagesID } else if arg == "--animals" { library.selection = LabModel.animalsID } else if arg == "--tasks" { library.selection = LabModel.tasksID } else if arg == "--demo" { await library.openDemo() } else if arg == "--demo-cohort" { await library.openDemoCohort() } else if FileManager.default.fileExists(atPath: arg) { await library.open(URL(fileURLWithPath: arg)) }
+                if arg == "--lab" { library.selection = LabModel.cagesID } else if arg == "--animals" { library.selection = LabModel.animalsID } else if arg == "--tasks" { library.selection = LabModel.tasksID } else if arg == "--demo" { await library.openDemo() } else if arg == "--demo-cohort" { await library.openDemoCohort() } else if arg.hasPrefix("--open="), FileManager.default.fileExists(atPath: String(arg.dropFirst(7))) { await library.open(URL(fileURLWithPath: String(arg.dropFirst(7)))) }
             }
         }
         .sheet(isPresented: $library.showNewCohort) { NewCohortSheet() }

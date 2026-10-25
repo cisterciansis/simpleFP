@@ -6,7 +6,7 @@ struct SimpleFPApp: App {
     @State private var lab = LabModel()
 
     var body: some Scene {
-        Settings { SettingsView() }
+        // The main window must be the first scene: macOS opens the first one on launch and reopen.
         Window("SimpleFP", id: "main") {
             ContentView()
                 .environment(library)
@@ -28,5 +28,6 @@ struct SimpleFPApp: App {
                     .disabled(library.selected?.results == nil)
             }
         }
+        Settings { SettingsView() }
     }
 }

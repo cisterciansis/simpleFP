@@ -78,7 +78,7 @@ final class LabModel {
     var toast: String?
 
     var initials: String {
-        get { UserDefaults.standard.string(forKey: "labInitials") ?? NSUserName().prefix(2).uppercased() }
+        get { UserDefaults.standard.string(forKey: "labInitials").flatMap { $0.isEmpty ? nil : $0 } ?? NSUserName().prefix(2).uppercased() }
         set { UserDefaults.standard.set(newValue, forKey: "labInitials") }
     }
 
