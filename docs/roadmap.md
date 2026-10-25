@@ -32,8 +32,8 @@ reproducible from a preset and a manifest.
 - Luau scripting via `mlua` (sandboxed): scripts receive engine results and call Rust kernels (filters, fits,
   bootstrap), returning new traces, metrics or figures. Pin `luau0-src` to 0.22.0; 0.22.1 crashes `mlua`.
 - Preset and script library with search (by sensor, region, rig); shareable as a single `.toml` + `.luau` bundle
-- Agent interface: a documented JSON-over-stdio mode in the CLI so an agent can inspect blocks, propose a preset,
-  run it and read QC without the GUI
+- [x] Agent interface: `simplefp mcp`, a Model Context Protocol server (stdio) with inspect, preset, analysis, cohort,
+  tracking and detector tools; arguments validated, CLI semantics
 
 ## v0.4: behavior video (design: docs/research/video-ai.md)
 - [x] `simplefp-video`: frame clock from the `Cam1` epoc. Frame-number gaps are errors; extra trailing frames are

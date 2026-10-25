@@ -4,6 +4,8 @@ use simplefp::{EventSource, tdt};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+mod mcp;
+
 /// Fiber photometry analysis for TDT recordings.
 #[derive(Parser)]
 #[command(version, about)]
@@ -105,6 +107,8 @@ enum Cmd {
         #[arg(long = "set", value_parser = parse_set)]
         sets: Vec<(String, String)>,
     },
+    /// Serve SimpleFP's tools to AI agents over the Model Context Protocol (stdio).
+    Mcp,
     /// Write a synthetic TDT block with known ground truth.
     Demo {
         dir: PathBuf,
@@ -258,6 +262,7 @@ fn run(cli: Cli) -> Result<(), String> {
             let src = preset::BUILTIN.iter().find(|(i, _)| *i == id).ok_or_else(|| format!("no built-in preset '{id}'"))?.1;
             print!("{src}");
         }
+        Cmd::Mcp => mcp::serve()?,
         Cmd::Demo { dir, seed } => {
             let ev = simplefp::write_demo_block(&dir, seed)?;
             println!("wrote {} with {} events on epoc 'Evt_'", dir.display(), ev.len());

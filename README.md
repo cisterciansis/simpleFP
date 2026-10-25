@@ -61,6 +61,21 @@ open apps/macos/build/SimpleFP.app
 
 Drop a block or a tank folder onto the window, or choose **File ▸ Open Demo Recording**. Requires Xcode 26 and Rust 1.90+.
 
+### AI agents (MCP)
+
+`simplefp mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio. Any MCP client
+(Claude Code, Claude Desktop, Cursor, …) can call these tools:
+- `inspect_block`, `list_presets`, `show_preset` (with validated overrides);
+- `analyze`, `cohort`;
+- `track`, `train_detector`, `propose_bouts`.
+
+Each tool runs the matching CLI subcommand, so results, files and validation are identical to the CLI. Arguments
+with unknown fields are rejected, and model proposals still need human review in the app. For Claude Code:
+
+```bash
+claude mcp add simplefp -- "$PWD/target/release/simplefp" mcp
+```
+
 ## Outputs (`<block>/simplefp/` by default)
 
 | File | Contents |
