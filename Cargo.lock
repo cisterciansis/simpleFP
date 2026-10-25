@@ -619,10 +619,12 @@ name = "simplefp"
 version = "0.1.0"
 dependencies = [
  "blake3",
+ "rayon",
  "serde",
  "serde_json",
  "simplefp-core",
  "simplefp-tdt",
+ "toml",
 ]
 
 [[package]]
@@ -649,6 +651,7 @@ name = "simplefp-ffi"
 version = "0.1.0"
 dependencies = [
  "simplefp",
+ "toml",
  "uniffi",
 ]
 

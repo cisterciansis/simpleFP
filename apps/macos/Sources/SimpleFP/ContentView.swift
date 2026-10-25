@@ -15,6 +15,8 @@ struct ContentView: View {
             Group {
                 if let rec = library.selected {
                     RecordingView(rec: rec)
+                } else if let doc = library.selectedCohort {
+                    CohortView(doc: doc)
                 } else {
                     EmptyState()
                 }
@@ -33,7 +35,7 @@ struct ContentView: View {
         }
         .inspector(isPresented: $showInspector) {
             Group {
-                if let rec = library.selected { InspectorView(rec: rec) } else { Color.clear }
+                if let rec = library.selected { InspectorView(rec: rec) } else if let doc = library.selectedCohort { CohortInspector(doc: doc) } else { Color.clear }
             }
             .inspectorColumnWidth(min: 260, ideal: 300, max: 380)
         }
@@ -50,9 +52,10 @@ struct ContentView: View {
         .task {
             // `SimpleFP <block>…` or `SimpleFP --demo` (e.g. via `open -a SimpleFP --args …`).
             for arg in CommandLine.arguments.dropFirst() {
-                if arg == "--demo" { await library.openDemo() } else if FileManager.default.fileExists(atPath: arg) { await library.open(URL(fileURLWithPath: arg)) }
+                if arg == "--demo" { await library.openDemo() } else if arg == "--demo-cohort" { await library.openDemoCohort() } else if FileManager.default.fileExists(atPath: arg) { await library.open(URL(fileURLWithPath: arg)) }
             }
         }
+        .sheet(isPresented: $library.showNewCohort) { NewCohortSheet() }
         .alert("SimpleFP", isPresented: Binding(get: { library.alert != nil }, set: { if !$0 { library.alert = nil } })) {
             Button("OK") { library.alert = nil }
         } message: {
@@ -67,6 +70,30 @@ private struct Sidebar: View {
     var body: some View {
         @Bindable var library = library
         List(selection: $library.selection) {
+            if !library.cohorts.isEmpty {
+                Section("Cohorts") {
+                    ForEach(library.cohorts) { doc in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(doc.title).font(.body.weight(.medium)).lineLimit(1)
+                            HStack(spacing: 6) {
+                                if doc.isRunning { ProgressView().controlSize(.mini) }
+                                if let r = doc.results {
+                                    Text("\(Set(r.animals.map(\.animal)).count) animals · \(r.sessions.count) sessions")
+                                }
+                                if doc.error != nil { Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow) }
+                            }
+                            .font(.caption).foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 2)
+                        .tag(doc.id)
+                        .contextMenu {
+                            Button("Show Manifest in Finder") { NSWorkspace.shared.activateFileViewerSelecting([doc.url]) }
+                            Divider()
+                            Button("Close", role: .destructive) { library.close(doc) }
+                        }
+                    }
+                }
+            }
             Section("Recordings") {
                 ForEach(library.recordings) { rec in
                     VStack(alignment: .leading, spacing: 2) {
@@ -92,15 +119,21 @@ private struct Sidebar: View {
         }
         .safeAreaInset(edge: .bottom) {
             HStack {
-                Button { library.presentOpenPanel() } label: { Label("Open", systemImage: "plus") }
-                    .buttonStyle(.borderless)
-                    .help("Open a TDT block or tank (⌘O)")
+                Menu {
+                    Button("Open Block, Tank or Cohort…") { library.presentOpenPanel() }
+                    Button("New Cohort from Open Recordings…") { library.showNewCohort = true }
+                        .disabled(library.recordings.isEmpty)
+                    Divider()
+                    Button("Demo Recording") { Task { await library.openDemo() } }
+                    Button("Demo Cohort") { Task { await library.openDemoCohort() } }
+                } label: { Label("Open", systemImage: "plus") }
+                    .menuStyle(.borderlessButton).fixedSize()
                 Spacer()
             }
             .padding(10)
         }
         .overlay {
-            if library.recordings.isEmpty {
+            if library.recordings.isEmpty && library.cohorts.isEmpty {
                 Text("No recordings").foregroundStyle(.tertiary)
             }
         }

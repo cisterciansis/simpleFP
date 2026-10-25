@@ -69,14 +69,61 @@ final class Recording: Identifiable {
 @MainActor @Observable
 final class Library {
     var recordings: [Recording] = []
-    var selection: Recording.ID?
+    var cohorts: [CohortDoc] = []
+    /// Shared id space: a recording or a cohort.
+    var selection: UUID?
     var alert: String?
+    var showNewCohort = false
     let presets: [PresetInfo] = SimpleFP.presets()
 
     var selected: Recording? { recordings.first { $0.id == selection } }
+    var selectedCohort: CohortDoc? { cohorts.first { $0.id == selection } }
 
-    /// Open a block, or every block directly inside a tank folder.
+    func openCohort(_ url: URL) async {
+        if let existing = cohorts.first(where: { $0.url == url }) {
+            selection = existing.id
+            await existing.run()
+            return
+        }
+        let doc = CohortDoc(url: url)
+        cohorts.append(doc)
+        selection = doc.id
+        await doc.run()
+    }
+
+    func openDemoCohort() async {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SimpleFP Demo Cohort-\(Int(Date().timeIntervalSince1970))")
+        do {
+            let path = try writeDemoCohort(dir: dir.path)
+            await openCohort(URL(fileURLWithPath: path))
+        } catch {
+            alert = error.localizedDescription
+        }
+    }
+
+    func exportCohort(_ doc: CohortDoc) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.prompt = "Export"
+        panel.directoryURL = doc.url.deletingLastPathComponent()
+        guard panel.runModal() == .OK, let base = panel.url else { return }
+        let out = base.appendingPathComponent("simplefp-cohort")
+        do {
+            try doc.export(to: out)
+            NSWorkspace.shared.activateFileViewerSelecting([out])
+        } catch {
+            alert = error.localizedDescription
+        }
+    }
+
+    /// Open a block, every block directly inside a tank folder, or a cohort manifest (.toml).
     func open(_ url: URL) async {
+        if url.pathExtension.lowercased() == "toml" {
+            await openCohort(url)
+            return
+        }
         let blocks: [URL]
         if isTdtBlock(dir: url.path) {
             blocks = [url]
@@ -114,6 +161,11 @@ final class Library {
         }
     }
 
+    func close(_ doc: CohortDoc) {
+        cohorts.removeAll { $0.id == doc.id }
+        if selection == doc.id { selection = recordings.first?.id ?? cohorts.first?.id }
+    }
+
     func close(_ rec: Recording) {
         recordings.removeAll { $0.id == rec.id }
         if selection == rec.id { selection = recordings.first?.id }
@@ -122,9 +174,10 @@ final class Library {
     func presentOpenPanel() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
-        panel.canChooseFiles = false
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [.folder, .toml]
         panel.allowsMultipleSelection = true
-        panel.message = "Choose a TDT block or a tank folder of blocks"
+        panel.message = "Choose a TDT block, a tank folder of blocks, or a cohort manifest (.toml)"
         panel.prompt = "Open"
         guard panel.runModal() == .OK else { return }
         let urls = panel.urls

@@ -11,6 +11,8 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+pub mod cohort;
+
 pub use simplefp_core as core;
 pub use simplefp_tdt as tdt;
 
@@ -25,6 +27,25 @@ pub enum EventSource {
     EpocOffset(String),
     /// Manually supplied times (s, block clock), e.g. from video scoring.
     Manual { label: String, times: Vec<f64> },
+}
+
+/// Resolve a preset: a built-in id, or a `.toml` path (relative to `base`).
+/// Sibling `.toml` files form the library that `extends` can name.
+pub fn load_preset(arg: &str, base: &Path) -> Result<Preset, String> {
+    if let Some(p) = simplefp_core::preset::builtin(arg) {
+        return Ok(p);
+    }
+    let path = if Path::new(arg).is_absolute() { PathBuf::from(arg) } else { base.join(arg) };
+    let src = fs::read_to_string(&path).map_err(|e| format!("preset '{arg}' is not built in and not readable: {e}"))?;
+    let mut lib = std::collections::BTreeMap::new();
+    if let Some(dir) = path.parent() {
+        for f in fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "toml")) {
+            if let (Some(stem), Ok(s)) = (f.file_stem().and_then(|s| s.to_str()), fs::read_to_string(&f)) {
+                lib.insert(stem.to_string(), s);
+            }
+        }
+    }
+    simplefp_core::preset::parse(&src, &lib).map_err(|e| format!("{arg}: {e}"))
 }
 
 /// A loaded recording with the channels chosen by the preset.
@@ -259,11 +280,40 @@ pub fn export(rec: &Recording, preset: &Preset, a: &Analysis, out: &Path) -> Res
     Ok(written)
 }
 
+/// Write a demo cohort: two groups × 4 animals × fed/fasted. Group "ChAT" has a
+/// larger evoked response (4 % vs 2 % ΔF/F) and fasting adds 1 %, so both a
+/// between-group and a within-subject effect exist. Returns the manifest path.
+pub fn write_demo_cohort(dir: &Path) -> Result<PathBuf, String> {
+    let mut toml = String::from("schema = 1\nname = \"Demo cohort\"\ndescription = \"Synthetic: ChAT 4 % vs WT 2 % evoked ΔF/F; fasting +1 %.\"\npreset = \"grab-ach3.0-tdt\"\nevents = [{ epoc = \"Evt_\" }]\n");
+    let mut seed = 10;
+    for (group, amp) in [("ChAT", 0.04), ("WT", 0.02)] {
+        for k in 1..=4 {
+            let animal = format!("{}{k}", &group[..1]);
+            for (cond, extra) in [("fed", 0.0), ("fasted", 0.01)] {
+                seed += 1;
+                // Animals differ in response size, as real ones do.
+                let a = (amp + extra) * (0.8 + 0.1 * k as f64);
+                let name = format!("{animal}-{cond}");
+                write_demo_block_with(&dir.join(&name), &simplefp_core::sim::SimParams { amplitude: a, seed, ..Default::default() })?;
+                let _ = write!(toml, "\n[[session]]\nblock = \"{name}\"\nanimal = \"{animal}\"\ngroup = \"{group}\"\ncondition = \"{cond}\"\n");
+            }
+        }
+    }
+    toml.push_str("\n[[contrast]]\nkind = \"between\"\ngroups = [\"ChAT\", \"WT\"]\ncondition = \"fed\"\n\n[[contrast]]\nkind = \"within\"\nconditions = [\"fasted\", \"fed\"]\ngroup = \"ChAT\"\n");
+    let path = dir.join("cohort.toml");
+    fs::write(&path, toml).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(path)
+}
+
 /// Write a realistic synthetic TDT block with an `Evt_` epoc at the evoked events.
 pub fn write_demo_block(dir: &Path, seed: u64) -> Result<Vec<f64>, String> {
+    write_demo_block_with(dir, &simplefp_core::sim::SimParams { seed, ..Default::default() })
+}
+
+pub fn write_demo_block_with(dir: &Path, params: &simplefp_core::sim::SimParams) -> Result<Vec<f64>, String> {
     use simplefp_core::sim;
     use simplefp_tdt::synth::*;
-    let s = sim::simulate(&sim::SimParams { seed, ..Default::default() });
+    let s = sim::simulate(params);
     let f32s = |v: &[f64]| v.iter().map(|&x| x as f32).collect::<Vec<f32>>();
     let (sig, ctl) = (f32s(&s.signal), f32s(&s.control));
     write_block(
@@ -295,6 +345,25 @@ mod tests {
         assert!(files.iter().any(|f| f.ends_with("run.json")));
         let manifest = fs::read_to_string(out.join("run.json")).unwrap();
         assert!(manifest.contains("blake3"));
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn demo_cohort_detects_designed_effects() {
+        let dir = std::env::temp_dir().join(format!("simplefp-cohort-{}", std::process::id()));
+        let manifest = write_demo_cohort(&dir).unwrap();
+        let run = cohort::run(&manifest).unwrap();
+        let g = &run.group;
+        assert_eq!(g.animals.len(), 16); // 8 animals × 2 conditions, one event
+        let test = |contrast: &str| g.metric_tests.iter().find(|t| t.contrast.starts_with(contrast) && t.metric == "mean").unwrap();
+        let between = test("ChAT − WT");
+        let within = test("fasted − fed");
+        assert!(between.estimate > 0.0 && between.p < 0.05 && between.exact, "{between:?}");
+        assert!(within.estimate > 0.0 && within.p <= 0.125, "{within:?}"); // 4 pairs: exact sign-flip floor is 2/16
+        let curve = g.contrasts.iter().find(|c| c.label.starts_with("ChAT − WT")).unwrap();
+        assert!(curve.significant.iter().any(|&s| s));
+        let files = cohort::export_cohort(&run, &dir.join("out")).unwrap();
+        assert!(files.iter().any(|f| f.ends_with("metric_tests.csv")));
         fs::remove_dir_all(&dir).ok();
     }
 

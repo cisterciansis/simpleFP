@@ -285,6 +285,173 @@ impl Session {
     }
 }
 
+#[derive(uniffi::Record)]
+pub struct CurveBand {
+    pub event: String,
+    /// "group · condition" for group curves, contrast label for contrasts.
+    pub label: String,
+    pub group: String,
+    pub condition: String,
+    pub n: Vec<u32>,
+    pub mean: Vec<f64>,
+    pub lo: Vec<f64>,
+    pub hi: Vec<f64>,
+    pub significant: Vec<bool>,
+}
+
+#[derive(uniffi::Record)]
+pub struct AnimalPoint {
+    pub event: String,
+    pub animal: String,
+    pub group: String,
+    pub condition: String,
+    pub n_trials: u32,
+    pub mean: f64,
+    pub auc: f64,
+    pub peak: f64,
+    pub trough: f64,
+}
+
+#[derive(uniffi::Record)]
+pub struct MetricTestRow {
+    pub event: String,
+    pub contrast: String,
+    pub metric: String,
+    pub n_a: u32,
+    pub n_b: u32,
+    pub estimate: f64,
+    pub lo: f64,
+    pub hi: f64,
+    pub p: f64,
+    pub exact: bool,
+    pub q: f64,
+}
+
+#[derive(uniffi::Record)]
+pub struct MetricSummaryRow {
+    pub event: String,
+    pub group: String,
+    pub condition: String,
+    pub metric: String,
+    pub n_animals: u32,
+    pub mean: f64,
+    pub lo: f64,
+    pub hi: f64,
+}
+
+#[derive(uniffi::Record)]
+pub struct SessionRow {
+    pub block: String,
+    pub animal: String,
+    pub group: String,
+    pub condition: String,
+    pub status: String,
+}
+
+#[derive(uniffi::Record)]
+pub struct CohortResults {
+    pub name: String,
+    pub description: String,
+    pub preset_name: String,
+    pub unit: String,
+    pub t: Vec<f64>,
+    pub groups: Vec<CurveBand>,
+    pub contrasts: Vec<CurveBand>,
+    pub animals: Vec<AnimalPoint>,
+    pub summaries: Vec<MetricSummaryRow>,
+    pub tests: Vec<MetricTestRow>,
+    pub sessions: Vec<SessionRow>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(uniffi::Object)]
+pub struct Cohort {
+    run: simplefp::cohort::CohortRun,
+}
+
+#[uniffi::export]
+impl Cohort {
+    /// Load and analyze a cohort manifest (`cohort.toml`).
+    #[uniffi::constructor]
+    pub fn open(manifest_path: String) -> R<Self> {
+        Ok(Cohort { run: simplefp::cohort::run(Path::new(&manifest_path))? })
+    }
+
+    pub fn results(&self) -> CohortResults {
+        let r = &self.run;
+        let g = &r.group;
+        let unit = if r.preset.events.baseline == Baseline::None { "ΔF/F (%)" } else { "ΔF/F (%), baseline-subtracted" };
+        CohortResults {
+            name: r.manifest.name.clone(),
+            description: r.manifest.description.clone(),
+            preset_name: r.preset.name.clone(),
+            unit: unit.into(),
+            t: g.t.clone(),
+            groups: g
+                .groups
+                .iter()
+                .map(|c| {
+                    let (lo, hi, significant) = c.ci.as_ref().map_or((vec![], vec![], vec![]), |ci| (ci.lo.clone(), ci.hi.clone(), ci.significant.clone()));
+                    CurveBand { event: c.event.clone(), label: format!("{} · {}", c.group, c.condition), group: c.group.clone(), condition: c.condition.clone(), n: vec![c.n_animals as u32], mean: c.mean.clone(), lo, hi, significant }
+                })
+                .collect(),
+            contrasts: g
+                .contrasts
+                .iter()
+                .map(|c| CurveBand { event: c.event.clone(), label: c.label.clone(), group: String::new(), condition: String::new(), n: c.n.iter().map(|&v| v as u32).collect(), mean: c.diff.clone(), lo: c.lo.clone(), hi: c.hi.clone(), significant: c.significant.clone() })
+                .collect(),
+            animals: g
+                .animals
+                .iter()
+                .map(|a| AnimalPoint { event: a.event.clone(), animal: a.animal.clone(), group: a.group.clone(), condition: a.condition.clone(), n_trials: a.n_trials as u32, mean: a.metrics.mean, auc: a.metrics.auc, peak: a.metrics.peak, trough: a.metrics.trough })
+                .collect(),
+            summaries: g
+                .metric_summaries
+                .iter()
+                .map(|m| MetricSummaryRow { event: m.event.clone(), group: m.group.clone(), condition: m.condition.clone(), metric: m.metric.clone(), n_animals: m.n_animals as u32, mean: m.mean, lo: m.lo, hi: m.hi })
+                .collect(),
+            tests: g
+                .metric_tests
+                .iter()
+                .map(|t| MetricTestRow { event: t.event.clone(), contrast: t.contrast.clone(), metric: t.metric.clone(), n_a: t.n[0] as u32, n_b: t.n[1] as u32, estimate: t.estimate, lo: t.lo, hi: t.hi, p: t.p, exact: t.exact, q: t.q })
+                .collect(),
+            sessions: r.reports.iter().map(|s| SessionRow { block: s.block.clone(), animal: s.animal.clone(), group: s.group.clone(), condition: s.condition.clone(), status: s.status.clone() }).collect(),
+            warnings: g.warnings.clone(),
+        }
+    }
+
+    pub fn export(&self, dir: String) -> R<u32> {
+        Ok(simplefp::cohort::export_cohort(&self.run, Path::new(&dir))?.len() as u32)
+    }
+}
+
+/// Write a synthetic two-group cohort (16 blocks + cohort.toml); returns the manifest path.
+#[uniffi::export]
+pub fn write_demo_cohort(dir: String) -> R<String> {
+    Ok(simplefp::write_demo_cohort(Path::new(&dir))?.display().to_string())
+}
+
+/// Write a cohort manifest from sessions assigned in the UI. Returns the TOML written.
+#[uniffi::export]
+pub fn write_cohort_manifest(path: String, name: String, preset_id: String, epocs: Vec<String>, sessions: Vec<SessionRow>) -> R<String> {
+    let manifest = simplefp::cohort::Manifest {
+        schema: 1,
+        name,
+        description: String::new(),
+        preset: preset_id,
+        events: epocs.into_iter().map(|epoc| simplefp::cohort::EventRef::Epoc { epoc }).collect(),
+        sessions: sessions
+            .into_iter()
+            .map(|s| simplefp::cohort::SessionEntry { block: s.block, animal: s.animal, group: s.group, condition: s.condition, events: None, exclude: false, exclude_reason: None })
+            .collect(),
+        contrasts: vec![],
+    };
+    let src = toml::to_string_pretty(&manifest).map_err(|e| FpError::from(e.to_string()))?;
+    simplefp::cohort::Manifest::parse(&src)?;
+    std::fs::write(&path, &src).map_err(|e| FpError::from(format!("{path}: {e}")))?;
+    Ok(src)
+}
+
 fn envelope(y: &[f64], t0: f64, fs: f64, a: f64, b: f64, buckets: usize) -> Vec<u8> {
     let n = y.len();
     if n == 0 || b <= a {

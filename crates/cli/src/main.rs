@@ -1,7 +1,6 @@
 use clap::{Parser, Subcommand};
-use simplefp::core::preset::{self, Preset};
+use simplefp::core::preset;
 use simplefp::{EventSource, tdt};
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -36,6 +35,15 @@ enum Cmd {
         #[arg(short, long)]
         out: Option<PathBuf>,
     },
+    /// Group analysis of many recordings from a cohort manifest (animal = unit).
+    Cohort {
+        manifest: PathBuf,
+        /// Output directory (default: <manifest dir>/simplefp-cohort).
+        #[arg(short, long)]
+        out: Option<PathBuf>,
+    },
+    /// Write a synthetic two-group, two-condition cohort with known effects.
+    DemoCohort { dir: PathBuf },
     /// List built-in presets, or print one as TOML.
     Presets { id: Option<String> },
     /// Write a synthetic TDT block with known ground truth.
@@ -44,24 +52,6 @@ enum Cmd {
         #[arg(long, default_value_t = 1)]
         seed: u64,
     },
-}
-
-fn load_preset(arg: &str) -> Result<Preset, String> {
-    if let Some(p) = preset::builtin(arg) {
-        return Ok(p);
-    }
-    let path = Path::new(arg);
-    let src = std::fs::read_to_string(path).map_err(|e| format!("preset '{arg}' is not built in and not readable: {e}"))?;
-    // Sibling .toml files form the library that `extends` can name.
-    let mut lib = BTreeMap::new();
-    if let Some(dir) = path.parent() {
-        for f in std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "toml")) {
-            if let (Some(stem), Ok(s)) = (f.file_stem().and_then(|s| s.to_str()), std::fs::read_to_string(&f)) {
-                lib.insert(stem.to_string(), s);
-            }
-        }
-    }
-    preset::parse(&src, &lib).map_err(|e| format!("{arg}: {e}"))
 }
 
 fn run(cli: Cli) -> Result<(), String> {
@@ -79,7 +69,7 @@ fn run(cli: Cli) -> Result<(), String> {
             }
         }
         Cmd::Run { block, preset, epoc, epoc_offset, events, out } => {
-            let p = load_preset(&preset)?;
+            let p = simplefp::load_preset(&preset, Path::new("."))?;
             let rec = simplefp::load(&block, &p)?;
             let mut sources: Vec<EventSource> = epoc.into_iter().map(EventSource::Epoc).collect();
             sources.extend(epoc_offset.into_iter().map(EventSource::EpocOffset));
@@ -106,6 +96,34 @@ fn run(cli: Cli) -> Result<(), String> {
                 println!("  {:<12} {:>3} trials ({} dropped), {sig}", ev.label, ev.epochs.trials.len(), ev.epochs.dropped.len());
             }
             println!("  → {}", out.display());
+        }
+        Cmd::Cohort { manifest, out } => {
+            let run = simplefp::cohort::run(&manifest)?;
+            let out = out.unwrap_or_else(|| manifest.parent().unwrap_or(Path::new(".")).join("simplefp-cohort"));
+            simplefp::cohort::export_cohort(&run, &out)?;
+            let g = &run.group;
+            let ok = run.reports.iter().filter(|r| r.status == "ok").count();
+            println!("{} · {} · {ok}/{} sessions analyzed", run.manifest.name, run.preset.name, run.reports.len());
+            for r in run.reports.iter().filter(|r| r.status != "ok") {
+                println!("  {}: {}", r.block, r.status);
+            }
+            for c in &g.groups {
+                println!("  {:<10} {:<10} {:<10} n = {} animals", c.event, c.group, c.condition, c.n_animals);
+            }
+            for t in g.metric_tests.iter().filter(|t| t.metric == "mean") {
+                println!(
+                    "  {:<10} {:<28} Δ mean = {:+.3} [{:+.3}, {:+.3}]  p = {:.4}{}  q = {:.4}  (n = {}/{})",
+                    t.event, t.contrast, t.estimate, t.lo, t.hi, t.p, if t.exact { " exact" } else { "" }, t.q, t.n[0], t.n[1]
+                );
+            }
+            for w in &g.warnings {
+                println!("  warning: {w}");
+            }
+            println!("  → {}", out.display());
+        }
+        Cmd::DemoCohort { dir } => {
+            let m = simplefp::write_demo_cohort(&dir)?;
+            println!("wrote 16 blocks and {}", m.display());
         }
         Cmd::Presets { id: None } => {
             for (id, _) in preset::BUILTIN {
