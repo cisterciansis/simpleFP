@@ -68,10 +68,13 @@ reproducible from a preset and a manifest.
 - [x] Core ML pose runner (bring your own model + sidecar), pose features, DLC-style export
 - [x] Behavior classifier (Rust gradient-boosted trees) trained on the lab's scoring, with cross-validated agreement
   and a review queue in the app; CLI `classify-train` / `classify-predict`
+- [x] Detector v2: calibrated probabilities and out-of-fold onset thresholds (from 10 bouts), v1 A/B on the same
+  folds, learning curve in bouts; multi-session training and an uncertainty-ordered review queue in the app;
+  accepted proposals count as training bouts
+- [x] RTMPose-m (AP-10K) → Core ML conversion script (`tools/pose`), SimCC decoding, rotation TTA; validated on lab video
 - Next:
-  - multi-session training from the app (cohort-wide detectors);
-  - learning-curve view (how many bouts are enough);
-  - packaged permissive pose model (RTMPose/ViTPose → Core ML);
+  - fine-tune the pose model on lab frames (inverted mice in tail suspension fail);
+  - more scored sessions (≥ 4 animals, ≥ 30 bouts) to re-test long windows, stacking and calibration;
   - VLM triage;
   - two-animal identity tracking;
   - Tinfoil/Chutes attestation verification

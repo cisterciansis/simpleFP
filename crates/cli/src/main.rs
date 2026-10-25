@@ -221,10 +221,13 @@ fn run(cli: Cli) -> Result<(), String> {
             println!("{} · trained on {} session(s), {} frames ({} positive)", file.id, sessions.len(), ev.frames, ev.positive_frames);
             println!("  cross-validation ({}, {} folds): frame κ {:.3} · PABAK {:.3} · frame F1 {:.3} · bout F1 {:.3} (tIoU ≥ 0.5; {} TP / {} FP / {} FN) · median onset error {:.2} s",
                 ev.scheme, ev.folds, ev.frame.kappa, ev.frame.pabak, ev.frame.f1, ev.bout.f1, ev.bout.true_positive, ev.bout.false_positive, ev.bout.false_negative, ev.bout.median_offset_s);
+            let b = &file.baseline;
+            println!("  v1 baseline, same folds: frame κ {:.3} · bout F1 {:.3}", b["frame"]["kappa"].as_f64().unwrap_or(f64::NAN), b["bout"]["f1"].as_f64().unwrap_or(f64::NAN));
+            println!("  learning curve (held-out): {}", file.learning_curve.iter().map(|c| format!("{} bouts κ {:.2} / F1 {:.2}", c.bouts, c.kappa, c.bout_f1)).collect::<Vec<_>>().join(" · "));
             println!("  → {}", out.display());
         }
         Cmd::ClassifyPredict { block, model, roi, out } => {
-            let file: simplefp::behavior::ModelFile = serde_json::from_str(&std::fs::read_to_string(&model).map_err(|e| format!("{}: {e}", model.display()))?).map_err(|e| format!("{}: {e}", model.display()))?;
+            let file = simplefp::behavior::ModelFile::parse(&std::fs::read_to_string(&model).map_err(|e| format!("{}: {e}", model.display()))?).map_err(|e| format!("{}: {e}", model.display()))?;
             let (rec, r) = track(&block, file.tracking_width, roi.as_deref())?;
             let f = simplefp::behavior::session_features(&r, rec.frame_clock("Cam1")?.fps, file.tracking_width)?;
             let props = simplefp::behavior::propose(&file, &f, &r.features.t)?;

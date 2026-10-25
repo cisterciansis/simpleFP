@@ -35,6 +35,29 @@ pub fn decode_heatmaps(data: &[f32], k: usize, h: usize, w: usize, channels_last
         .collect())
 }
 
+/// SimCC decoding (RTMPose): each keypoint has 1-D logit vectors over x and y bins at
+/// `split` bins per input pixel. Location = argmax / split (input pixels); confidence =
+/// the smaller of the two peak logits, as MMPose does. `x` is `[K, Wx]`, `y` is `[K, Wy]`.
+pub fn decode_simcc(x: &[f32], y: &[f32], k: usize, split: f64) -> Result<Vec<(f64, f64, f64)>, String> {
+    if k == 0 || !x.len().is_multiple_of(k) || !y.len().is_multiple_of(k) || split <= 0.0 {
+        return Err("SimCC outputs do not match the keypoint count".into());
+    }
+    let (wx, wy) = (x.len() / k, y.len() / k);
+    let peak = |v: &[f32]| v.iter().enumerate().fold((0usize, f32::NEG_INFINITY), |b, (i, &e)| if e > b.1 { (i, e) } else { b });
+    Ok((0..k)
+        .map(|c| {
+            let (ix, vx) = peak(&x[c * wx..(c + 1) * wx]);
+            let (iy, vy) = peak(&y[c * wy..(c + 1) * wy]);
+            (ix as f64 / split, iy as f64 / split, vx.min(vy) as f64)
+        })
+        .collect())
+}
+
+/// Map a point in model-input pixels (`in_w × in_h`) to frame pixels via the crop.
+pub fn input_to_frame(p: (f64, f64), crop: [f64; 4], in_w: usize, in_h: usize) -> (f64, f64) {
+    (crop[0] + p.0 / in_w as f64 * (crop[2] - crop[0]), crop[1] + p.1 / in_h as f64 * (crop[3] - crop[1]))
+}
+
 /// Map a keypoint from heatmap pixels back to frame pixels, given the crop the
 /// model saw (`[x0, y0, x1, y1]` in frame pixels) and the heatmap size.
 pub fn to_frame(p: (f64, f64), crop: [f64; 4], hm_w: usize, hm_h: usize) -> (f64, f64) {
@@ -106,6 +129,20 @@ mod tests {
         let (fx, fy) = to_frame((7.5, 7.5), [100.0, 50.0, 164.0, 114.0], 16, 16);
         assert!((fx - 132.0).abs() < 1e-9 && (fy - 82.0).abs() < 1e-9, "centre of the crop");
         assert!(decode_heatmaps(&hm, 2, h, w, false).is_err());
+    }
+
+    #[test]
+    fn simcc_decoding() {
+        let (k, w) = (2, 512);
+        let mut x = vec![0.0f32; k * w];
+        let mut y = vec![0.0f32; k * w];
+        x[100] = 0.9; y[300] = 0.7; // keypoint 0 at (50, 150) input px, conf 0.7
+        x[w + 511] = 0.2; y[w] = 0.4;
+        let d = decode_simcc(&x, &y, k, 2.0).unwrap();
+        assert_eq!(d[0], (50.0, 150.0, 0.699999988079071));
+        assert!((d[1].0 - 255.5).abs() < 1e-9 && d[1].2 < 0.21);
+        assert_eq!(input_to_frame((128.0, 64.0), [100.0, 100.0, 164.0, 164.0], 256, 256), (132.0, 116.0));
+        assert!(decode_simcc(&x, &y[..11], k, 2.0).is_err(), "uneven per-keypoint length");
     }
 
     #[test]

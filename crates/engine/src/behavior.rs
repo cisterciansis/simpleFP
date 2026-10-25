@@ -113,7 +113,7 @@ pub fn export_behavior(r: &TrackResult, out: &Path) -> Result<(), String> {
 
 // ---------------------------------------------------------------- behavior classifiers
 
-use simplefp_video::classify::{self, Decode, Evaluation, Features as FrameFeatures, Labeled, Model, Params};
+use simplefp_video::classify::{self, CurvePoint, Detector, Evaluation, Features as FrameFeatures, Labeled, Params};
 
 /// A trained behavior detector as saved to disk, with its provenance and validation.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -124,10 +124,26 @@ pub struct ModelFile {
     /// `simplefp-bt/<behavior>@<hash>`: written on every proposal it makes.
     pub id: String,
     pub tracking_width: usize,
-    pub decode: Decode,
     pub trained_on: Vec<String>,
+    /// Cross-validated agreement of this detector with the human labels.
     pub evaluation: serde_json::Value,
-    pub model: Model,
+    /// The same folds scored by the v1 single-pass model, for comparison.
+    pub baseline: serde_json::Value,
+    /// Held-out agreement vs number of training bouts.
+    pub learning_curve: Vec<CurvePoint>,
+    pub detector: Detector,
+}
+
+pub const MODEL_SCHEMA: u32 = 2;
+
+impl ModelFile {
+    pub fn parse(json: &str) -> Result<ModelFile, String> {
+        let v: serde_json::Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
+        if v["schema"].as_u64() != Some(MODEL_SCHEMA as u64) {
+            return Err(format!("model file schema {} is not supported (need {MODEL_SCHEMA}); retrain it", v["schema"]));
+        }
+        serde_json::from_value(v).map_err(|e| e.to_string())
+    }
 }
 
 /// Features for a tracked session (ROI from tracking, or the whole frame).
@@ -167,34 +183,39 @@ pub fn read_bouts_csv(path: &Path, behavior: &str) -> Result<Vec<(f64, f64)>, St
     Ok(out)
 }
 
-/// Train on labeled sessions, cross-validate, and package the model.
+/// Train on labeled sessions, cross-validate against the v1 baseline, measure the
+/// learning curve, and package the detector.
 pub fn train_model(sessions: &[(String, FrameFeatures, Vec<f64>, Vec<bool>)], behavior: &str, width: usize, params: Params) -> Result<(ModelFile, Evaluation), String> {
     let names = sessions.first().ok_or("no sessions")?.1.names.clone();
-    let data: Vec<Labeled> = sessions.iter().map(|(_, f, t, y)| Labeled { x: &f.rows, t, y }).collect();
-    let ev = classify::cross_validate(&data, &names, behavior, params, None, 5)?;
-    let (tt, yy): (Vec<f64>, Vec<bool>) = sessions.iter().flat_map(|(_, _, t, y)| t.iter().copied().zip(y.iter().copied())).unzip();
-    let decode = Decode::from_labels(&tt, &yy);
-    let (x, y): (Vec<Vec<f32>>, Vec<bool>) = sessions.iter().flat_map(|(_, f, _, y)| f.rows.iter().cloned().zip(y.iter().copied())).unzip();
-    let model = classify::train(&x, &y, &names, behavior, params)?;
-    let hash = blake3::hash(serde_json::to_string(&model).map_err(|e| e.to_string())?.as_bytes()).to_hex()[..10].to_string();
+    let data: Vec<Labeled> = sessions.iter().map(|(_, f, t, y)| Labeled { x: f.rows.clone(), t: t.clone(), y: y.clone() }).collect();
+    let fit = |tr: &[Labeled]| classify::fit_detector(tr, &names, behavior, params);
+    let ev = classify::evaluate(&data, 5, fit)?;
+    let base = classify::evaluate(&data, 5, |tr| classify::fit_baseline(tr, &names, behavior, params))?;
+    // Bouts = rising edges of the labels.
+    let total: usize = sessions.iter().map(|(_, _, _, y)| y.first().map_or(0, |&b| b as usize) + y.windows(2).filter(|w| !w[0] && w[1]).count()).sum();
+    let steps: Vec<usize> = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89].into_iter().filter(|&m| m < total).chain([total]).collect();
+    let learning_curve = classify::learning_curve(&data, 5, &steps, fit)?;
+    let detector = fit(&data)?;
+    let hash = blake3::hash(serde_json::to_string(&detector).map_err(|e| e.to_string())?.as_bytes()).to_hex()[..10].to_string();
     let file = ModelFile {
-        schema: 1,
+        schema: MODEL_SCHEMA,
         behavior: behavior.into(),
         id: format!("simplefp-bt/{behavior}@{hash}"),
         tracking_width: width,
-        decode,
         trained_on: sessions.iter().map(|s| s.0.clone()).collect(),
         evaluation: serde_json::to_value(&ev).map_err(|e| e.to_string())?,
-        model,
+        baseline: serde_json::to_value(&base).map_err(|e| e.to_string())?,
+        learning_curve,
+        detector,
     };
     Ok((file, ev))
 }
 
 /// Proposals for one tracked session (review required before use).
 pub fn propose(m: &ModelFile, f: &FrameFeatures, t: &[f64]) -> Result<Vec<simplefp_video::Annotation>, String> {
-    if f.names != m.model.names {
+    if f.names != m.detector.names {
         return Err("feature set differs from the one the model was trained on (re-track with the model's tracking width or retrain)".into());
     }
-    let p = m.model.predict(&f.rows);
-    Ok(classify::proposals(&classify::decode_bouts(&p, t, &m.decode), &m.behavior, &m.id))
+    let p = m.detector.probabilities(&f.rows);
+    Ok(classify::proposals(&classify::decode_bouts(&p, t, &m.detector.decode), &m.behavior, &m.id))
 }

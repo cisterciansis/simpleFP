@@ -737,10 +737,11 @@ impl LabStore {
 
 #[derive(uniffi::Record)]
 pub struct TrackSummary {
-    /// Block-clock time per frame, then per-frame x, y, speed (little-endian f64 bytes each).
+    /// Block-clock time per frame, then per-frame x, y, area, speed (little-endian f64 bytes each).
     pub t: Vec<u8>,
     pub x: Vec<u8>,
     pub y: Vec<u8>,
+    pub area: Vec<u8>,
     pub speed: Vec<u8>,
     pub immobile_frac: f64,
     pub lost_frac: f64,
@@ -846,6 +847,7 @@ impl VideoTracker {
             t: f64_bytes(&f.t),
             x: f64_bytes(&f.x),
             y: f64_bytes(&f.y),
+            area: f64_bytes(&st.dets[..f.t.len()].iter().map(|d| d.area).collect::<Vec<f64>>()),
             speed: f64_bytes(&f.speed),
             immobile_frac: f.immobile.iter().filter(|&&b| b).count() as f64 / f.t.len().max(1) as f64,
             lost_frac: f.lost_frac,
@@ -883,6 +885,19 @@ pub fn decode_pose_heatmaps(data: Vec<u8>, k: u32, h: u32, w: u32, channels_last
     let kp = simplefp::video::pose::decode_heatmaps(&f, k as usize, h as usize, w as usize, channels_last)?;
     Ok(kp.into_iter().flat_map(|(x, y, c)| {
         let (fx, fy) = simplefp::video::pose::to_frame((x, y), crop, w as usize, h as usize);
+        [fx, fy, c]
+    }).collect())
+}
+
+/// Decode one frame's SimCC outputs (RTMPose; little-endian f32 bytes, `[K, Wx]` and `[K, Wy]`)
+/// to frame pixels via the crop. `in_w`/`in_h` are the model input size. Returns flattened (x, y, confidence).
+#[uniffi::export]
+pub fn decode_pose_simcc(x: Vec<u8>, y: Vec<u8>, k: u32, split: f64, in_w: u32, in_h: u32, crop: Vec<f64>) -> R<Vec<f64>> {
+    let f = |b: &[u8]| b.as_chunks::<4>().0.iter().map(|c| f32::from_le_bytes(*c)).collect::<Vec<f32>>();
+    let crop: [f64; 4] = crop.try_into().map_err(|_| FpError::from("crop must have 4 values".to_string()))?;
+    let kp = simplefp::video::pose::decode_simcc(&f(&x), &f(&y), k as usize, split)?;
+    Ok(kp.into_iter().flat_map(|(px, py, c)| {
+        let (fx, fy) = simplefp::video::pose::input_to_frame((px, py), crop, in_w as usize, in_h as usize);
         [fx, fy, c]
     }).collect())
 }
@@ -928,7 +943,7 @@ pub fn train_behavior(sessions: Vec<TrainingSession>, behavior: String) -> R<Str
 /// Proposals (annotation JSON array, `review: proposed`) from a model for one tracked session.
 #[uniffi::export]
 pub fn propose_behavior(model_json: String, session: Arc<Session>, tracker: Arc<VideoTracker>, camera: String) -> R<String> {
-    let m: simplefp::behavior::ModelFile = serde_json::from_str(&model_json).map_err(|e| FpError::from(format!("model file: {e}")))?;
+    let m = simplefp::behavior::ModelFile::parse(&model_json).map_err(|e| FpError::from(format!("model file: {e}")))?;
     if m.tracking_width != tracker.w {
         return Err(FpError::from(format!("model was trained at {} px tracking width; this video was tracked at {} px", m.tracking_width, tracker.w)));
     }
