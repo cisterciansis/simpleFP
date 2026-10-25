@@ -101,6 +101,43 @@ enum VideoImport {
     }
 }
 
+// MARK: - Tracking (AVFoundation decode → Rust tracker)
+
+enum FrameDecoder {
+    /// Decode every frame scaled to `w×h`, handing the luma plane (grayscale) of every
+    /// `k`-th frame to `body`. Sequential AVAssetReader decode: never seek per frame.
+    nonisolated static func luma(url: URL, w: Int, h: Int, every k: Int, _ body: ([UInt8]) throws -> Void) async throws -> Int {
+        let asset = AVURLAsset(url: url)
+        guard let track = try await asset.loadTracks(withMediaType: .video).first else { throw NSError(domain: "SimpleFP", code: 8, userInfo: [NSLocalizedDescriptionKey: "no video track"]) }
+        let reader = try AVAssetReader(asset: asset)
+        let out = AVAssetReaderTrackOutput(track: track, outputSettings: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
+            kCVPixelBufferWidthKey as String: w, kCVPixelBufferHeightKey as String: h,
+        ])
+        out.alwaysCopiesSampleData = false
+        reader.add(out)
+        guard reader.startReading() else { throw reader.error ?? NSError(domain: "SimpleFP", code: 9) }
+        var i = 0
+        var frame = [UInt8](repeating: 0, count: w * h)
+        while let sb = out.copyNextSampleBuffer() {
+            defer { i += 1 }
+            guard i % k == 0, let pb = CMSampleBufferGetImageBuffer(sb) else { continue }
+            CVPixelBufferLockBaseAddress(pb, .readOnly)
+            if let base = CVPixelBufferGetBaseAddressOfPlane(pb, 0) {
+                let stride = CVPixelBufferGetBytesPerRowOfPlane(pb, 0)
+                let src = base.assumingMemoryBound(to: UInt8.self)
+                frame.withUnsafeMutableBufferPointer { dst in
+                    for y in 0..<h { (dst.baseAddress! + y * w).update(from: src + y * stride, count: w) }
+                }
+            }
+            CVPixelBufferUnlockBaseAddress(pb, .readOnly)
+            try body(frame)
+        }
+        if reader.status == .failed { throw reader.error ?? NSError(domain: "SimpleFP", code: 10) }
+        return i
+    }
+}
+
 // MARK: - Model
 
 @MainActor @Observable
@@ -116,6 +153,17 @@ final class VideoModel {
     var playing = false
     var warning: String?
     var error: String?
+
+    /// Classical tracking results (block clock) and the arena ROI (fractions of the frame).
+    var track: TrackSummary?
+    var trackT: [Double] = []
+    var trackX: [Double] = []
+    var trackY: [Double] = []
+    var trackSpeed: [Double] = []
+    var tracking = false
+    var roi: [Double]?
+    var drawingROI = false
+    var playableURL: URL?
 
     var ethogram: Ethogram
     var annotations: [AnnotationJSON] = []
@@ -145,6 +193,7 @@ final class VideoModel {
             let playable = try await Task.detached { try await VideoImport.playable(source) }.value
             warning = nil
             player.replaceCurrentItem(with: AVPlayerItem(url: playable))
+            playableURL = playable
             let t = try await FrameTable.load(playable)
             table = t
             warning = try rec.session.checkVideoFrames(camera: camera, videoFrames: UInt64(t.movieTimes.count))
@@ -255,6 +304,44 @@ final class VideoModel {
         }
     }
 
+    /// Track the animal through the whole video (two sequential decode passes), using
+    /// the drawn ROI or an auto-detected arena.
+    func analyzeVideo() async {
+        guard let rec, let url = playableURL, let n = table?.movieTimes.count, n > 1 else { return }
+        tracking = true
+        defer { tracking = false }
+        let (w, h) = (320, 240)
+        let camera = camera, session = rec.session, roi = roi ?? []
+        do {
+            let tracker = try VideoTracker(width: UInt32(w), height: UInt32(h), darkAnimal: true)
+            let summary = try await Task.detached(priority: .userInitiated) { () -> TrackSummary in
+                _ = try await FrameDecoder.luma(url: url, w: w, h: h, every: max(1, n / 100)) { try tracker.addSample(frame: Data($0)) }
+                _ = try tracker.begin(roi: roi)
+                _ = try await FrameDecoder.luma(url: url, w: w, h: h, every: 1) { try tracker.step(frame: Data($0)) }
+                return try tracker.finish(session: session, camera: camera, minImmobileS: 1.0)
+            }.value
+            let d = { (b: Data) in b.withUnsafeBytes { Array($0.bindMemory(to: Double.self)) } }
+            (trackT, trackX, trackY, trackSpeed) = (d(summary.t), d(summary.x), d(summary.y), d(summary.speed))
+            if self.roi == nil, summary.roi.count == 4 {
+                self.roi = [Double(summary.roi[0]) / Double(w), Double(summary.roi[1]) / Double(h), Double(summary.roi[2]) / Double(w), Double(summary.roi[3]) / Double(h)]
+            }
+            track = summary
+            if summary.roi.isEmpty { warning = "No arena found automatically: draw the arena ROI and track again." }
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// Immobility onsets and ends as analysis events (proposals from the tracker; review them on the video first).
+    func useImmobilityAsEvents() {
+        guard let rec, let t = track, !t.bouts.isEmpty else { return }
+        let starts = stride(from: 0, to: t.bouts.count, by: 2).map { t.bouts[$0] }
+        let ends = stride(from: 1, to: t.bouts.count, by: 2).map { t.bouts[$0] }
+        rec.manualEvents.removeAll { ["immobility_onset", "mobility_onset"].contains($0.label) }
+        rec.manualEvents += [.manual(label: "immobility_onset", times: starts), .manual(label: "mobility_onset", times: ends)]
+        Task { await rec.run() }
+    }
+
     func stop() {
         if let observer { player.removeTimeObserver(observer) }
         player.pause()
@@ -297,6 +384,7 @@ struct VideoPane: View {
                 PlayerLayerView(player: model.player)
                     .background(.black)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
+                TrackOverlay(model: model)
                 if !model.openBouts.isEmpty {
                     HStack(spacing: 6) {
                         ForEach(model.openBouts.keys.sorted(), id: \.self) { l in
@@ -308,6 +396,7 @@ struct VideoPane: View {
                 }
             }
             transport
+            trackingBar
             ethogramBar
             if let w = model.warning { Label(w, systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange) }
             if let e = model.error { Label(e, systemImage: "xmark.octagon.fill").font(.caption).foregroundStyle(.red) }
@@ -340,6 +429,26 @@ struct VideoPane: View {
                 .help("Block-clock time from the \(model.camera) camera epoc")
         }
         .buttonStyle(.borderless)
+    }
+
+    private var trackingBar: some View {
+        HStack(spacing: 8) {
+            Button { Task { await model.analyzeVideo() } } label: { Label(model.track == nil ? "Track Animal" : "Re-track", systemImage: "scope") }
+                .disabled(model.tracking || model.table == nil)
+                .help("Classical tracking (no model): background subtraction inside the arena. Position, speed and immobility on the TDT clock.")
+            Button { model.drawingROI.toggle() } label: { Label("Arena", systemImage: model.drawingROI ? "rectangle.dashed.badge.record" : "rectangle.dashed") }
+                .help("Drag on the video to draw the arena; tracking ignores everything outside it")
+            if model.tracking { ProgressView().controlSize(.small) }
+            if let t = model.track {
+                Text(String(format: "immobile %.0f %% · lost %.0f %%", t.immobileFrac * 100, t.lostFrac * 100)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                Button("Analyze Immobility") { model.useImmobilityAsEvents() }
+                    .disabled(t.bouts.isEmpty)
+                    .help("Align ΔF/F to immobility onsets and ends (tracker proposals: spot-check them on the video)")
+            }
+            Spacer()
+        }
+        .controlSize(.small)
+        .buttonStyle(.bordered)
     }
 
     private var ethogramBar: some View {
@@ -392,6 +501,52 @@ struct VideoPane: View {
                 }
             }
             .frame(maxHeight: 110)
+        }
+    }
+}
+
+/// ROI rectangle, tracked centroid at the current frame, and ROI drawing.
+private struct TrackOverlay: View {
+    @Bindable var model: VideoModel
+    @State private var dragStart: CGPoint?
+    @State private var dragNow: CGPoint?
+
+    /// The aspect-fit rectangle the 4:3 video occupies inside `size`.
+    private func videoRect(_ size: CGSize) -> CGRect {
+        let aspect: CGFloat = 4.0 / 3.0
+        let w = min(size.width, size.height * aspect), h = w / aspect
+        return CGRect(x: (size.width - w) / 2, y: (size.height - h) / 2, width: w, height: h)
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let r = videoRect(geo.size)
+            Canvas { ctx, _ in
+                if let roi = model.roi {
+                    let rr = CGRect(x: r.minX + roi[0] * r.width, y: r.minY + roi[1] * r.height, width: (roi[2] - roi[0]) * r.width, height: (roi[3] - roi[1]) * r.height)
+                    ctx.stroke(Path(roundedRect: rr, cornerRadius: 3), with: .color(.yellow), style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
+                }
+                if let a = dragStart, let b = dragNow {
+                    ctx.stroke(Path(CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(a.x - b.x), height: abs(a.y - b.y))), with: .color(.yellow), lineWidth: 2)
+                }
+                if let tr = model.track, model.frame < model.trackX.count, model.trackX[model.frame].isFinite {
+                    let p = CGPoint(x: r.minX + model.trackX[model.frame] / Double(tr.width) * r.width, y: r.minY + model.trackY[model.frame] / Double(tr.height) * r.height)
+                    ctx.stroke(Path(ellipseIn: CGRect(x: p.x - 9, y: p.y - 9, width: 18, height: 18)), with: .color(.green), lineWidth: 2)
+                }
+            }
+            .allowsHitTesting(model.drawingROI)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 4).onChanged { v in
+                dragStart = dragStart ?? v.startLocation
+                dragNow = v.location
+            }.onEnded { v in
+                let f = { (p: CGPoint) in (min(max((p.x - r.minX) / r.width, 0), 1), min(max((p.y - r.minY) / r.height, 0), 1)) }
+                let (a, b) = (f(v.startLocation), f(v.location))
+                if abs(a.0 - b.0) > 0.05, abs(a.1 - b.1) > 0.05 {
+                    model.roi = [min(a.0, b.0), min(a.1, b.1), max(a.0, b.0), max(a.1, b.1)]
+                }
+                dragStart = nil; dragNow = nil; model.drawingROI = false
+            })
         }
     }
 }

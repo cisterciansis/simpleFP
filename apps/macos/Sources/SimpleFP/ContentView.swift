@@ -180,6 +180,7 @@ private struct RecordingView: View {
     let rec: Recording
     @State private var mode: TraceMode = .dff
     @State private var showVideo = true
+    @State private var showAssistant = false
 
     var body: some View {
         VSplitView {
@@ -203,10 +204,16 @@ private struct RecordingView: View {
                 .frame(maxWidth: .infinity, minHeight: 220, maxHeight: .infinity)
         }
         .task(id: rec.id) { await rec.loadVideo() }
+        .sheet(isPresented: $showAssistant) { AssistantView(rec: rec) }
         .onDisappear { rec.video?.player.pause() }
         .navigationTitle(rec.title)
         .navigationSubtitle(subtitle)
         .toolbar {
+            ToolbarItem {
+                Button { showAssistant = true } label: { Label("Ask", systemImage: "sparkles") }
+                    .disabled(rec.results == nil)
+                    .help("Ask the Lab Assistant about this recording (local or private model)")
+            }
             ToolbarItem {
                 Button { showVideo.toggle() } label: { Label("Video", systemImage: showVideo ? "video.fill" : "video") }
                     .disabled(rec.video == nil)

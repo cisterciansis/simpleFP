@@ -6,6 +6,7 @@ struct SimpleFPApp: App {
     @State private var lab = LabModel()
 
     var body: some Scene {
+        Settings { SettingsView() }
         Window("SimpleFP", id: "main") {
             ContentView()
                 .environment(library)

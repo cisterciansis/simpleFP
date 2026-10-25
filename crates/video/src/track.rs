@@ -341,13 +341,31 @@ pub struct Features {
     pub lost_frac: f64,
 }
 
+/// Centered running median over an odd window, ignoring NaN (NaN where no finite values).
+pub fn running_median(x: &[f64], window: usize) -> Vec<f64> {
+    let half = window / 2;
+    (0..x.len())
+        .map(|i| {
+            if !x[i].is_finite() {
+                return f64::NAN;
+            }
+            let mut v: Vec<f64> = x[i.saturating_sub(half)..(i + half + 1).min(x.len())].iter().copied().filter(|v| v.is_finite()).collect();
+            let k = v.len() / 2;
+            *v.select_nth_unstable_by(k, f64::total_cmp).1
+        })
+        .collect()
+}
+
 /// Derive features from detections. `threshold = None` uses [`suggest_threshold`].
 pub fn features(clock: &crate::FrameClock, dets: &[Detection], scale: f64, threshold: Option<f64>, min_immobile_s: f64) -> Result<Features, String> {
     let n = clock.frames().map_or(dets.len(), |f| f.min(dets.len()));
     let t: Vec<f64> = (0..n).map(|k| clock.time(k).unwrap_or(f64::NAN)).collect();
     let (x, y): (Vec<f64>, Vec<f64>) = dets[..n].iter().map(|d| (d.x, d.y)).unzip();
     // No animal in view means no mobility measure (an empty arena is not "immobile").
-    let motion: Vec<f64> = dets[..n].iter().map(|d| if d.x.is_nan() { f64::NAN } else { d.motion }).collect();
+    let raw: Vec<f64> = dets[..n].iter().map(|d| if d.x.is_nan() { f64::NAN } else { d.motion }).collect();
+    // Running median over ~0.5 s: removes periodic keyframe re-quantization spikes
+    // (one every GOP in H.264) that would otherwise break every stillness bout.
+    let motion = running_median(&raw, ((clock.fps * 0.5).round() as usize).max(1) | 1);
     let thr = threshold.or_else(|| suggest_threshold(&motion)).ok_or("not enough frames to suggest an immobility threshold")?;
     let min_frames = (min_immobile_s * clock.fps).round().max(1.0) as usize;
     let idx = immobility(&motion, thr, min_frames);
@@ -418,6 +436,10 @@ mod tests {
     fn immobility_bouts_and_threshold() {
         let m: Vec<f64> = (0..100).map(|i| if (20..50).contains(&i) || (70..72).contains(&i) { 0.2 } else { 5.0 }).collect();
         assert_eq!(immobility(&m, 1.0, 10), vec![(20, 50)]);
+        // A keyframe spike every 10 frames inside a still bout is removed by the running median.
+        let mut spiky = m.clone();
+        (25..50).step_by(10).for_each(|i| spiky[i] = 6.0);
+        assert_eq!(immobility(&running_median(&spiky, 5), 1.0, 10), vec![(20, 50)]);
         let t = suggest_threshold(&m).unwrap();
         assert!(t > 0.2 && t < 5.0, "{t}");
         assert!(Tracker::new(vec![0; 10], 160, 120, TrackParams::default()).is_err());

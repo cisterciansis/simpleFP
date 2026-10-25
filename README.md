@@ -14,6 +14,12 @@ Built first for **GRAB-ACh3.0** acetylcholine imaging and designed to grow into 
   between-group and within-subject contrasts, exact permutation tests, hierarchical bootstrap, Benjamini–Hochberg.
 - **Lab store**: animals, cages, breeding, surgeries (virus, coordinates, fiber), sessions, exclusions and cohorts in
   one local SQLite file with a tamper-evident audit log. Frozen colony cohorts feed group analysis directly.
+- **Video + AI**:
+  - frame-accurate player synced to the trace, with ethogram hotkey scoring and inter-rater agreement;
+  - classical tracking (speed, immobility, arena ROI) on the TDT clock;
+  - a Lab Assistant over local or private (TEE) models. See [docs/ai.md](docs/ai.md).
+- **Parameters three ways**: Easy mode controls, TOML presets, or `--set key=value` from scripts. All three go
+  through one validator.
 - **Provenance**: every run writes `run.json` with the resolved preset, its hash, engine version and BLAKE3 digests of the inputs.
 - **Speed**: a 2-hour, 1 kHz, two-channel recording with 200 events and 10,000 bootstrap resamples analyzes in about 0.23 s on an M5 Pro.
 

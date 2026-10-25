@@ -733,6 +733,115 @@ impl LabStore {
     }
 }
 
+// MARK: video tracking (frames decoded by AVFoundation, luma only)
+
+#[derive(uniffi::Record)]
+pub struct TrackSummary {
+    /// Block-clock time per frame, then per-frame x, y, speed (little-endian f64 bytes each).
+    pub t: Vec<u8>,
+    pub x: Vec<u8>,
+    pub y: Vec<u8>,
+    pub speed: Vec<u8>,
+    pub immobile_frac: f64,
+    pub lost_frac: f64,
+    pub threshold: f64,
+    /// Immobility bouts as flattened (start, end) block times.
+    pub bouts: Vec<f64>,
+    /// ROI used, in tracking-frame pixels [x0, y0, x1, y1].
+    pub roi: Vec<u32>,
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(uniffi::Object)]
+pub struct VideoTracker {
+    w: usize,
+    h: usize,
+    dark: bool,
+    state: Mutex<TrackState>,
+}
+
+#[derive(Default)]
+struct TrackState {
+    samples: Vec<Vec<u8>>,
+    tracker: Option<simplefp::video::track::Tracker>,
+    dets: Vec<simplefp::video::track::Detection>,
+    roi: Option<[usize; 4]>,
+}
+
+fn f64_bytes(v: &[f64]) -> Vec<u8> {
+    v.iter().flat_map(|x| x.to_le_bytes()).collect()
+}
+
+#[uniffi::export]
+impl VideoTracker {
+    #[uniffi::constructor]
+    pub fn new(width: u32, height: u32, dark_animal: bool) -> R<Self> {
+        if !(16..=2048).contains(&width) || !(16..=2048).contains(&height) {
+            return Err(FpError::from("tracking frame size out of range".to_string()));
+        }
+        Ok(VideoTracker { w: width as usize, h: height as usize, dark: dark_animal, state: Mutex::new(TrackState::default()) })
+    }
+
+    /// Pass 1: a frame sampled for the median background.
+    pub fn add_sample(&self, frame: Vec<u8>) -> R<()> {
+        if frame.len() != self.w * self.h {
+            return Err(FpError::from("frame size mismatch".to_string()));
+        }
+        self.state.lock().unwrap().samples.push(frame);
+        Ok(())
+    }
+
+    /// Build the background and start tracking. `roi` = [x0, y0, x1, y1] fractions of the frame, or empty for auto-detect.
+    /// Returns the ROI in pixels (empty if none was found and the whole frame is used).
+    pub fn begin(&self, roi: Vec<f64>) -> R<Vec<u32>> {
+        use simplefp::video::track;
+        let mut st = self.state.lock().unwrap();
+        let bg = track::median_background(&st.samples)?;
+        let roi_px = match roi.as_slice() {
+            [x0, y0, x1, y1] if (0.0..1.0).contains(x0) && x0 < x1 && *x1 <= 1.0 && (0.0..1.0).contains(y0) && y0 < y1 && *y1 <= 1.0 => {
+                Some([(x0 * self.w as f64) as usize, (y0 * self.h as f64) as usize, (x1 * self.w as f64).ceil() as usize, (y1 * self.h as f64).ceil() as usize])
+            }
+            [] => track::auto_arena(&bg, self.w, self.h, 2),
+            _ => return Err(FpError::from("ROI must be four fractions x0 < x1, y0 < y1 within 0…1".to_string())),
+        };
+        let p = track::TrackParams { dark_animal: self.dark, roi: roi_px, ..Default::default() };
+        st.tracker = Some(track::Tracker::new(bg, self.w, self.h, p)?);
+        st.samples.clear();
+        st.dets.clear();
+        st.roi = roi_px;
+        Ok(roi_px.map_or(vec![], |r| r.iter().map(|&v| v as u32).collect()))
+    }
+
+    /// Pass 2: track one frame (in order).
+    pub fn step(&self, frame: Vec<u8>) -> R<()> {
+        let mut st = self.state.lock().unwrap();
+        let d = st.tracker.as_mut().ok_or_else(|| FpError::from("call begin() first".to_string()))?.step(&frame)?;
+        st.dets.push(d);
+        Ok(())
+    }
+
+    /// Features on the block clock of `camera` in `session`.
+    pub fn finish(&self, session: &Session, camera: String, min_immobile_s: f64) -> R<TrackSummary> {
+        let st = self.state.lock().unwrap();
+        let clock = session.rec.frame_clock(&camera)?;
+        let f = simplefp::video::track::features(&clock, &st.dets, 1.0, None, min_immobile_s)?;
+        Ok(TrackSummary {
+            t: f64_bytes(&f.t),
+            x: f64_bytes(&f.x),
+            y: f64_bytes(&f.y),
+            speed: f64_bytes(&f.speed),
+            immobile_frac: f.immobile.iter().filter(|&&b| b).count() as f64 / f.t.len().max(1) as f64,
+            lost_frac: f.lost_frac,
+            threshold: f.immobility_threshold,
+            bouts: f.bouts.iter().flat_map(|&(a, b)| [a, b]).collect(),
+            roi: st.roi.map_or(vec![], |r| r.iter().map(|&v| v as u32).collect()),
+            width: self.w as u32,
+            height: self.h as u32,
+        })
+    }
+}
+
 fn envelope(y: &[f64], t0: f64, fs: f64, a: f64, b: f64, buckets: usize) -> Vec<u8> {
     let n = y.len();
     if n == 0 || b <= a {

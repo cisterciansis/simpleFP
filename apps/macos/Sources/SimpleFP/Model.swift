@@ -73,6 +73,10 @@ final class Recording: Identifiable {
         let v = VideoModel(rec: self, file: file, scorer: UserDefaults.standard.string(forKey: "labInitials") ?? NSUserName().prefix(2).uppercased())
         video = v
         await v.load()
+        // Dev/automation flags: `--track` runs tracking on open, `--seek=<s>` moves the playhead.
+        let args = CommandLine.arguments
+        if args.contains("--track") { await v.analyzeVideo() }
+        if let s = args.first(where: { $0.hasPrefix("--seek=") }), let t = Double(s.dropFirst(7)) { v.seek(blockTime: t) }
     }
 
     func use(preset p: PresetInfo) async {

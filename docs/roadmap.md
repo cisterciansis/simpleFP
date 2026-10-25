@@ -60,6 +60,19 @@ reproducible from a preset and a manifest.
 - AI-assisted scoring: vision models propose events, the user confirms; inter-rater agreement reported
 - Continuous-behavior regression (speed, distance-to-food) against ΔF/F
 
+## AI (design: docs/ai.md)
+- [x] Classical tracking: arena ROI (auto, editable), centroid, speed, motion energy, immobility on the TDT clock (app + CLI)
+- [x] Lab Assistant over any OpenAI-compatible provider (local MLX/Ollama, Chutes TEE, Tinfoil); validated one-click
+  parameter suggestions
+- [x] Easy mode parameters + Code (TOML) + CLI `--set`, all through one validator
+- Next:
+  - Core ML pose runner (permissive models; SuperAnimal as a user download);
+  - in-app behavior classifier (Create ML) trained on scored sessions;
+  - proposal review queue;
+  - VLM triage;
+  - two-animal identity tracking;
+  - Tinfoil/Chutes attestation verification
+
 ## v0.5: lab management (design: docs/research/colony-management.md)
 - [x] Local SQLite store, hash-chained audit, interval cage history, atomic weaning and surgery records
 - [x] Protocol-expiry guard, derived tasks (wean, post-op, protocol, capacity, genotype), animal timeline, notes
