@@ -1,0 +1,2374 @@
+**Optimizing Fiber Photometry Analysis for Acetylcholine Signals in
+Feeding Behavior: A Methodological Report**\
+1. Foundational Principles for Analyzing Acetylcholine Fiber Photometry
+Data\
+The analysis of fiber photometry data, particularly for dynamic
+neurotransmitters like acetylcholine (ACh), requires meticulous
+attention to preprocessing and normalization to ensure data integrity
+and valid biological interpretation. These foundational steps are
+critical for distinguishing true neural signals from various artifacts
+inherent in the recording technique.\
+**1.1. Signal Preprocessing: Essential Steps for Data Integrity**\
+Effective preprocessing is the first line of defense against data
+contamination. Key steps include correcting for motion artifacts,
+addressing photobleaching and baseline drift, and applying appropriate
+signal filtering.\
+**1.1.1. Motion Artifact Correction**\
+Fiber photometry signals are notoriously susceptible to artifacts caused
+by the animal\'s movement. These artifacts can arise from physical
+displacement of the fiber optic relative to the tissue, changes in light
+coupling, or even movement-related hemodynamic changes, all of which can
+generate fluorescence fluctuations that mimic or obscure genuine neural
+signals.^1^ Therefore, robust motion artifact correction is
+indispensable.\
+A standard and effective approach involves the use of an isosbestic
+control channel. This typically involves exciting the fluorescent sensor
+at a wavelength where its emission is largely independent of the analyte
+of interest (e.g., Ca\<sup\>2+\</sup\> or, in this context, ACh
+binding). For GCaMP-like sensors, a wavelength around 405-415 nm often
+serves this purpose.^2^ The data provided from the Tucker Davis
+Technologies (TDT) system, as indicated by the StoresListing.txt files
+within the fpExplorer example data, includes a \"405A\" channel
+alongside the \"465A\" signal channel, confirming the use of an
+isosbestic control.^4^ This 405 nm channel is designed to capture
+fluorescence changes due to motion, photobleaching, and fiber bending,
+but ideally not those due to changes in ACh concentration.\
+The core of isosbestic correction lies in mathematically relating the
+control channel\'s signal to the artifactual component within the signal
+channel and then removing it. Several fitting methods exist:
+ 
+-   Polynomial Fitting (as implemented in fpExplorer): The fpExplorer
+    software provides \"Standard Polynomial Fitting\" and \"Modified
+    Polynomial Fitting\" options.^4^ These methods are likely
+    implemented in functions such as normalize_pMat (inspired by the
+    pMAT analysis tool) and normalize_dff found within
+    fpExplorer_functions.py.^4^ The principle involves fitting the 405
+    nm control channel data to the 465 nm signal channel data using a
+    polynomial equation. The resulting scaled control channel signal,
+    representing the estimated artifact, is then used to correct the
+    signal channel. The \"Modified Polynomial Fitting,\" attributed to
+    Patrick Mulholland ^4^, suggests an enhancement to a basic
+    polynomial approach, though its specific algorithm is not detailed
+    in the provided materials.
+ 
+-   Linear Regression (Jing et al., 2020): The reference paper by Jing
+    et al. employs a straightforward linear regression to scale the 405
+    nm channel signal to best fit the 465 nm signal. This scaled control
+    signal is subsequently subtracted from the 465 nm signal to yield a
+    corrected trace.^5^ This is equivalent to a 1st-degree polynomial
+    fit.
+ 
+-   Robust Regression (e.g., Iteratively Reweighted Least Squares -
+    IRLS): An important consideration is how the fitting process handles
+    true neural signals that might co-occur with movement. Standard
+    Ordinary Least Squares (OLS) regression, which often underlies basic
+    linear or polynomial fits, can be problematic. If a genuine ACh
+    transient in the 465 nm channel occurs simultaneously with a
+    movement (and thus an artifact in both channels), OLS might
+    misinterpret the neural component as part of the shared artifact.
+    This can lead to the control channel being \"over-fitted\" to the
+    neural event, resulting in the subtraction and attenuation of the
+    true biological signal. Recent literature strongly advocates for
+    robust regression methods like IRLS to address this.^2^ IRLS
+    iteratively assigns lower weights to data points in the signal
+    channel that are poorly predicted by the control channel (i.e., the
+    unique neural transients). This focuses the fit on the shared
+    artifactual components, providing a more accurate estimation of the
+    motion artifact and better preservation of the neural signal.^2^
+    Tukey\'s bisquare weighting function is often recommended for IRLS
+    in this context.^2^\
+    The choice of fitting algorithm for isosbestic correction is
+    therefore critical for accuracy, particularly if ACh signals and
+    animal movement are temporally correlated during behaviors such as
+    feeding. If feeding behaviors involve stereotyped movements that are
+    temporally locked to the ACh signals of interest, fpExplorer\'s
+    current polynomial fitting methods, if OLS-based, might lead to an
+    underestimation of the true magnitude of these ACh transients. The
+    \"Modified Polynomial Fitting\" within fpExplorer may be an attempt
+    to improve upon this, but its specific implementation warrants
+    investigation. For maximal accuracy, especially in challenging
+    datasets, implementing or utilizing an IRLS-based correction for
+    this step should be considered. The work by Seltzer & Barker
+    provides a strong rationale and detailed methodology for applying
+    IRLS in fiber photometry.^2^\
+    **1.1.2. Photobleaching and Baseline Drift Correction**\
+    Beyond acute motion artifacts, fiber photometry signals are also
+    affected by slower changes. Photobleaching refers to the
+    irreversible photochemical destruction of the fluorophore under
+    continuous excitation, leading to a gradual decline in overall
+    fluorescence intensity. Baseline drift can also occur due to slow
+    physiological changes or minor instabilities in the recording
+    equipment.^1^\
+    Correction strategies include:
+ 
+```{=html}
+<!-- -->
+```
+-   Isosbestic Channel Correction: As the control channel is also
+    subject to photobleaching and slow drifts, fitting methods that
+    align the control channel to the signal channel (discussed in 1.1.1)
+    inherently help to correct for these shared slow trends.^2^ This is
+    often the primary mechanism for addressing photobleaching.
+ 
+-   Mathematical Detrending/Fitting:
+ 
+    -   Jing et al. (2020) report using the 'BEADS' MATLAB script with a
+        very low cut-off frequency (0.0005 cycles/sample) to remove slow
+        drift from their signals.^5^ This implies a form of high-pass
+        filtering or very slow trend removal.
+ 
+    -   The polynomial fitting routines within fpExplorer ^4^, used for
+        normalization, also serve as a detrending method by fitting a
+        polynomial curve to the baseline of the signal.
+ 
+    -   Explicit exponential fitting, as described by Zhang et al. ^7^,
+        involves modeling the photobleaching decay with a function like
+        a×ebx+c and subtracting this fitted decay curve from the raw
+        signal.\
+        While fitting the isosbestic channel is a powerful tool for
+        correcting photobleaching, the mathematical form of this fit
+        (e.g., linear, polynomial order) or any additional detrending
+        applied directly to the signal channel will influence the
+        accuracy of the estimated baseline fluorescence (F0).
+        Photobleaching is often a non-linear process. If the chosen
+        fitting method does not adequately capture this non-linearity,
+        the estimated F0 will be inaccurate across the recording, which
+        in turn distorts any dF/F calculations. Therefore, visual
+        inspection of the fitted baseline against the
+        (control-channel-corrected) signal is crucial to ensure the
+        bleaching trend is appropriately modeled.\
+        **1.1.3. Filtering Strategies**\
+        Signal filtering is employed to remove high-frequency noise
+        (e.g., from electronics, or very rapid minor movements not fully
+        captured by the isosbestic correction) without distorting the
+        physiological signal of interest.^2^\
+        Common methods include:
+ 
+```{=html}
+<!-- -->
+```
+-   Low-pass filtering: This attenuates frequencies above a specified
+    cutoff. Jing et al. (2020) used a 6 Hz low-pass filter for one
+    system and a 20 Hz low-pass filter for demodulated TDT signals.^52^
+    also recommends low-pass filtering as a standard preprocessing step.
+ 
+-   Moving average/median filter: fpExplorer provides a smoothing filter
+    option, defined by filter_window in its settings (defaulting to 10
+    samples).^4^ This is likely a moving average filter, where the
+    window size dictates the extent of smoothing.\
+    The selection of filter parameters (e.g., cutoff frequency, window
+    size) is critical and must be made in consideration of the ACh
+    sensor\'s response kinetics and the data\'s sampling rate. The
+    ACh3.0 sensor exhibits sub-second response kinetics ^5^, meaning it
+    can report relatively fast physiological changes in ACh. Overly
+    aggressive filtering (e.g., a very low cutoff frequency or an
+    excessively wide smoothing window) can attenuate the amplitude and
+    slow the perceived kinetics of these true, rapid ACh transients.
+    Conversely, insufficient filtering may leave high-frequency noise
+    that could obscure subtle signals or interfere with subsequent
+    analyses like peak detection. The default smoothing window of 10
+    samples in fpExplorer needs to be interpreted relative to the
+    data\'s sampling rate after any downsampling steps; for instance, at
+    100 Hz sampling, a 10-sample window corresponds to 100 ms of
+    smoothing. It is generally advisable to apply the minimum filtering
+    necessary and to visually inspect the impact of different filter
+    settings on representative data segments.\
+    **1.2. Signal Normalization: dF/F vs. Z-score**\
+    After preprocessing to remove artifacts and noise, the fluorescence
+    signal is typically normalized. Normalization converts the signal
+    into standardized units, facilitating comparisons across different
+    time points, trials, animals, or experimental conditions. The two
+    most common methods are dF/F (delta F over F) and Z-score.\
+    **1.2.1. dF/F (Delta F over F)**
+ 
+```{=html}
+<!-- -->
+```
+-   Principle: dF/F represents the fractional change in fluorescence
+    (ΔF) relative to a baseline fluorescence level (F0). It is
+    calculated as ΔF/F = (F - F0) / F0, where F is the fluorescence at a
+    given time point and F0 is the baseline fluorescence. This value is
+    often multiplied by 100 to be expressed as a percentage.^7^
+ 
+-   F0 Estimation -- The Crucial Step: The accuracy of dF/F values is
+    highly dependent on the method used to estimate F0.
+ 
+    -   Jing et al. (2020) Method: F0 is determined by fitting the
+        autofluorescence-subtracted data with a 2nd order exponential
+        function.^5^ This implies a time-varying F0 that accounts for
+        slow drifts like photobleaching.
+ 
+    -   fpExplorer\'s Polynomial Fitting: The \"Standard Polynomial
+        Fitting\" and \"Modified Polynomial Fitting\" options in
+        fpExplorer are central to its F0 estimation.^4^ After motion
+        correction (which involves fitting the control channel to the
+        signal channel), a polynomial is likely fitted to the corrected
+        signal channel to serve as the time-varying F0. Functions like
+        normalize_dff and normalize_pMat in fpExplorer_functions.py
+        handle these calculations.^4^
+ 
+    -   Fitted Isosbestic Signal as F0: A robust and widely recommended
+        approach is to use the fitted control channel signal (after it
+        has been scaled to match the baseline of the signal channel) as
+        F0.^2^ The dF/F calculation then becomes (Signal_Corrected -
+        Fitted_Control) / Fitted_Control or (Signal_Raw -
+        Fitted_Control) / Fitted_Control. This method inherently
+        incorporates corrections for motion and photobleaching captured
+        by the control channel into the F0 definition.
+ 
+    -   Other Methods: Simpler methods include using a moving average or
+        median of a segment of the signal (as potentially used in one of
+        the user\'s MATLAB scripts, suggested by the mention of
+        \"movmean\" ^12^), or using the median fluorescence of the
+        entire recording session ^7^, though the latter is less suitable
+        for capturing dynamic changes in F0 due to photobleaching.
+ 
+```{=html}
+<!-- -->
+```
+-   Advantages: dF/F can preserve information about the relative
+    magnitude of fluorescence changes. It is often considered more
+    appropriate than Z-scoring for analyzing spontaneous neural activity
+    or when comparing absolute signal changes, as it is less influenced
+    by alterations in baseline signal variance.^13^
+ 
+-   Limitations: The method is highly sensitive to the accuracy of F0
+    estimation. An incorrectly estimated or poorly fitted F0 will
+    systematically scale all dF/F values, potentially leading to
+    erroneous interpretations.\
+    **1.2.2. Z-score**
+ 
+```{=html}
+<!-- -->
+```
+-   Principle: The Z-score transforms the signal by subtracting the mean
+    of a defined baseline period and then dividing by the standard
+    deviation (SD) of that same baseline period: Z = (F -
+    mean(F_baseline)) / SD(F_baseline).^9^ The fluorescence signal (F)
+    used here is typically the trace that has already undergone
+    preprocessing, including motion correction and potentially an
+    initial dF/F-like normalization (e.g., if F0 is a fitted
+    polynomial).
+ 
+-   Baseline Selection: The choice of the baseline period is critical
+    and significantly impacts the resulting Z-score values. Common
+    choices include:
+ 
+    -   A pre-event window: a segment of several seconds immediately
+        preceding a stimulus or behavioral onset.
+ 
+    -   A period of known behavioral quiescence: for example, NREM sleep
+        was used by Jing et al. (2020) for some of their Z-score
+        normalizations.^5^
+ 
+```{=html}
+<!-- -->
+```
+-   fpExplorer Implementation: fpExplorer provides Z-score calculation
+    capabilities.^4^ The batch-z-score-options image in the fpExplorer
+    README ^4^ indicates that users can define a baseline window (e.g.,
+    \"baseline window start/end\") for Z-score calculation during batch
+    processing. This suggests that Z-scoring in fpExplorer is performed
+    on a trace that has likely already undergone some form of baseline
+    correction or normalization via the polynomial fitting methods.
+ 
+-   Advantages: Z-scoring is useful for standardizing signals across
+    different recording sessions, animals, or even varying sensor
+    expression levels, as it expresses signal changes in units of
+    baseline variability. It is a commonly employed method for
+    event-related analyses to assess the statistical \"significance\" of
+    a response relative to baseline fluctuations.^13^
+ 
+-   Limitations and Critiques:
+ 
+    -   Sensitivity to Baseline SD: If the baseline SD is very small
+        (e.g., due to very low neural activity or excessive signal
+        smoothing), Z-scores can become artificially inflated, making
+        small actual changes appear very large.
+ 
+    -   Masking True Effects: Z-scoring can obscure true changes in the
+        absolute magnitude or kinetics of signals, particularly if the
+        baseline characteristics (mean or SD) themselves change between
+        conditions or over time (e.g., in longitudinal studies). The
+        bioRxiv paper by Hart et al. provides a strong critique of
+        Z-scoring for analyzing *spontaneous* neurotransmitter signals,
+        arguing it can \"remove variation of experimental
+        interest\".^13^
+ 
+    -   Not Universally Applicable: Z-scoring is less suitable for
+        analyzing tonic (slow, sustained) shifts in neural activity or
+        situations where the baseline itself is dynamic and of
+        physiological interest.\
+        **1.2.3. Contextual Appropriateness and Recommendations**\
+        The decision between dF/F and Z-score normalization is not
+        absolute but depends heavily on the specific research question,
+        the expected characteristics of the ACh signals (e.g., phasic
+        bursts vs. tonic shifts, event-locked vs. spontaneous activity),
+        and the properties of the baseline recording period.\
+        Jing et al. (2020) exemplify this context-dependent choice by
+        using both dF/F0 (calculated from a 2nd order exponential fit
+        for F0) for general signal representation and Z-scores
+        (normalized to NREM sleep SD) for specific analyses, such as
+        those related to sleep-wake cycles.^5^ This demonstrates that
+        different normalization strategies can be appropriate even
+        within a single comprehensive study. The strong critiques of
+        Z-scoring found in the literature, particularly from Hart et al.
+        ^13^, are primarily focused on its application to *spontaneous*
+        neurotransmitter release and *longitudinal studies* where
+        pharmacological manipulations or other interventions might alter
+        baseline signal kinetics or variability. In such cases,
+        Z-scoring can indeed mask these important changes or
+        artificially amplify noise.\
+        fpExplorer provides options for both dF/F (via its polynomial
+        fitting normalization routines) and Z-score calculations ^4^,
+        rightly placing the decision with the user based on their
+        analytical goals.\
+        For the primary objective of this research---analyzing ACh
+        signals during discrete feeding events---which are likely to be
+        phasic and time-locked to specific behavioral actions, Z-scoring
+        relative to a stable pre-event baseline is a widely accepted and
+        justifiable method. This approach allows for the comparison of
+        response magnitudes across different trials or animals by
+        standardizing the signal changes to the variability observed
+        immediately before the event. fpExplorer\'s Z-score
+        functionality, when configured with an appropriate pre-event
+        baseline window (e.g., -10 seconds to -2 seconds before food
+        presentation or the first bite), should be suitable for this
+        purpose.\
+        However, for more exploratory analyses, such as investigating
+        \"everything else like social interaction and stuff,\" or if
+        there is a hypothesis that tonic ACh levels change around
+        feeding (e.g., due to satiety or anticipation), or if the
+        baseline ACh activity itself is expected to vary significantly
+        between conditions, then dF/F with a robustly estimated F0 would
+        be more appropriate. dF/F better preserves information about
+        absolute changes in signal magnitude. In fpExplorer, this would
+        involve using the output of the polynomial fitting normalization
+        (ideally the \"Modified Polynomial Fitting\" if it proves to be
+        more robust, or after an IRLS correction if implemented
+        separately).\
+        Recommendations:
+ 
+1.  Primary Event-Related Analysis (Feeding Events): Utilize Z-scores.
+    Define a consistent pre-event baseline window (e.g., 5-10 seconds
+    immediately preceding food presentation or the first interaction,
+    ensuring this period is free of other major behavioral events or
+    significant signal fluctuations). fpExplorer\'s batch Z-score
+    options should facilitate this.
+ 
+2.  Exploratory Analysis or Investigation of Tonic Changes: Employ dF/F.
+    Ensure that the F0 used for this calculation is derived from the
+    motion-corrected signal trace using fpExplorer\'s polynomial fitting
+    routines. It is crucial to visually inspect the F0 fit to confirm it
+    accurately captures the baseline trend without being unduly
+    influenced by large, transient neural signals.
+ 
+3.  Transparency in Reporting: Regardless of the method chosen for a
+    particular analysis, meticulously document the F0 estimation
+    technique if using dF/F (e.g., \"F0 was determined by a X-order
+    polynomial fit to the 405nm-corrected 465nm signal\") or the exact
+    baseline window definition and period if using Z-scores (e.g.,
+    \"Z-scores were calculated relative to the mean and standard
+    deviation of the signal from -10s to -2s prior to event onset\").
+    This level of detail is essential for reproducibility and clear
+    interpretation of the findings.\
+    **2. Analyzing Event-Related Cholinergic Activity During Feeding
+    (and other behaviors)**\
+    This section focuses on the methodologies for analyzing fiber
+    photometry signals that are temporally locked to specific behavioral
+    events, with a primary emphasis on feeding, but also extending to
+    grooming and social interaction as per the user\'s interest.\
+    **2.1. Defining and Time-Locking Behavioral Events**\
+    The accuracy of event-related analysis fundamentally depends on the
+    precise and consistent definition and timestamping of behavioral
+    events. The user\'s current practice of \"scribing videos that go
+    along with the videos like maybe a timestamp and then we show
+    grooming and another timestamp food introduced another timestamp
+    feeding etc.\" represents a standard and often necessary approach
+    for complex, freely moving behaviors.
+ 
+-   Precision and Consistency: The reliability of associating neural
+    signals with behavior is directly proportional to the accuracy of
+    the behavioral timestamps. Vague definitions or inconsistent marking
+    of event onsets and offsets will lead to smeared peri-event averages
+    and potentially misleading conclusions.
+ 
+-   fpExplorer\'s Event Handling: fpExplorer is designed to accommodate
+    event-based experimental data. It supports event codes from TDT
+    systems (e.g., \"Note 1\", \"PrtA 253\" as seen in example data ^4^)
+    and can also import events from user-generated CSV files.^4^ This
+    flexibility is crucial for integrating manually scribed behavioral
+    annotations. The PreviewEventBasedWidget within fpExplorer.py is
+    specifically tailored for such analyses.^4^ It is important to
+    ensure that the format of the scribed timestamps (likely a CSV file
+    with columns for timestamp and event name/type) is compatible with
+    fpExplorer\'s import requirements.
+ 
+-   Guidance from Jing et al. (2020): While the specific methods for
+    annotating feeding behavior are not detailed in the provided summary
+    of Jing et al. ^5^, their work on other paradigms (e.g., using TTL
+    pulses for foot-shock synchronization, or computer triggers for
+    treadmill experiments) highlights the general importance of precise
+    temporal alignment between behavioral events and neural recordings.\
+    For complex behaviors like feeding, it is highly beneficial to
+    dissect the behavior into distinct, operationally defined
+    sub-components rather than using a single, broad \"feeding\" event.
+    Feeding is not a monolithic action; it encompasses an appetitive
+    phase (e.g., approach to food, investigation), a consummatory phase
+    (e.g., biting, chewing, licking), and potentially a
+    post-consummatory or satiety phase. ACh is implicated in diverse
+    cognitive and motivational processes, including attention, learning,
+    and reward processing, any of which could be differentially engaged
+    during these distinct sub-phases of feeding. A single \"feeding\"
+    timestamp might average out or obscure specific ACh signals related
+    to these individual actions (e.g., the decision to initiate feeding,
+    the sensory experience of the first bite, or the motor patterns of
+    chewing).\
+    The user\'s video scribing methodology is well-suited to capture
+    this granularity. For instance, distinct timestamps could be
+    generated for events such as:\
+    \* \"Food Introduced\" (FI)\
+    \* \"Approach Initiated\" (AI)\
+    \* \"First Sniff/Contact with Food\" (FS)\
+    \* \"First Bite\" (FB)\
+    \* \"Sustained Chewing Bout Start\" (CS)\
+    \* \"Sustained Chewing Bout End\" (CE)\
+    \* \"End of Feeding Episode\" (EF)\
+    Analyzing ACh signals aligned to these more granular sub-events can
+    provide a much richer and more nuanced understanding of cholinergic
+    involvement across the entire sequence of feeding behavior.
+    fpExplorer\'s event system, with its ability to import events from
+    CSV files, should be capable of handling multiple distinct event
+    markers corresponding to these sub-components.\
+    Recommendation: Develop a detailed ethogram for feeding behavior, as
+    well as for grooming and social interaction, with precise,
+    unambiguous operational definitions for the onset and offset of each
+    behavioral component and sub-component to be analyzed. If multiple
+    individuals are involved in scoring, inter-rater reliability should
+    be assessed. Structure the scribed data output (likely a CSV) such
+    that each defined sub-event has its own unique timestamp and a
+    descriptive event label that fpExplorer can recognize.\
+    **2.2. Peri-Event Signal Analysis: Visualization and Initial
+    Assessment**\
+    Once behavioral events are accurately timestamped and aligned with
+    the preprocessed and normalized photometry trace, peri-event
+    analysis can be performed to visualize and assess average neural
+    responses.
+ 
+```{=html}
+<!-- -->
+```
+-   Peri-Event Time Histograms (PETHs) / Averaged Traces: This is the
+    most common visualization method. It involves:
+ 
+    1.  Extracting segments of the normalized photometry signal (dF/F or
+        Z-score) centered around each instance of a specific event
+        (e.g., all \"First Bite\" events).
+ 
+    2.  Aligning these segments to the event onset (time = 0).
+ 
+    3.  Calculating the average signal across all trials at each time
+        point relative to the event.
+ 
+    4.  Plotting this average trace, typically with time on the x-axis
+        and the normalized signal on the y-axis. Shading around the mean
+        trace usually represents the Standard Error of the Mean (SEM) or
+        a confidence interval, providing an indication of trial-to-trial
+        consistency.^7^ fpExplorer\'s PreviewEventBasedWidget is
+        designed to perform such peri-event averaging.^4^
+ 
+```{=html}
+<!-- -->
+```
+-   Heatmaps: Heatmaps offer a complementary view by displaying the
+    signal from *every individual trial* for a given event, rather than
+    just the average. Typically:
+ 
+    1.  Time relative to event onset is plotted on the x-axis.
+ 
+    2.  Trial number is plotted on the y-axis.
+ 
+    3.  The amplitude of the normalized signal at each time point for
+        each trial is represented by color intensity (e.g., red for high
+        activity, blue for low activity). Heatmaps are invaluable for
+        identifying trial-to-trial variability in the neural response,
+        observing learning-related changes across trials, or detecting
+        subgroups of responses that might be obscured by simple
+        averaging.^7^ While the provided snippets do not explicitly
+        state that fpExplorer generates heatmaps, this is a standard
+        visualization feature in many fiber photometry analysis packages
+        and could be implemented using exported data in MATLAB or Python
+        if not directly available in fpExplorer.
+ 
+```{=html}
+<!-- -->
+```
+-   Defining the Analysis Window: The selection of an appropriate time
+    window around the event (e.g., -10 seconds to +30 seconds for a
+    feeding event) is crucial. This window must be sufficiently long to:
+ 
+    1.  Capture a stable pre-event baseline period.
+ 
+    2.  Encompass the full duration of any post-event neural response,
+        including its rise, peak, and return to baseline. Jing et
+        al. (2020) utilized various analysis windows depending on the
+        specific experimental paradigm.^5^ fpExplorer\'s
+        PeriEventOptionsWindow (detailed in fpExplorer.py) allows users
+        to define the \"Time before event (sec)\" and \"Time after event
+        (sec)\" ^4^, providing control over this window.
+ 
+```{=html}
+<!-- -->
+```
+-   Baseline Period for Peri-Event Z-scores: If Z-scores are used for
+    peri-event analysis, the baseline period (e.g., -10s to -2s relative
+    to event onset) must be carefully chosen from the pre-event portion
+    of the analysis window. This baseline should ideally reflect a
+    period of neutral behavior or stable neural activity immediately
+    preceding the event of interest. The mean and standard deviation
+    from this specific window are then used to Z-score the entire
+    peri-event segment for that trial.\
+    **2.3. Quantification Metrics for Cholinergic Transients**\
+    Visual inspection of peri-event averages and heatmaps provides
+    qualitative insights. For statistical comparison, specific features
+    of the ACh response profile must be quantified. The choice of
+    metrics should be guided by the observed morphology of the ACh
+    signal during the behavior (e.g., is it a sharp peak, a sustained
+    elevation, or a rapid burst of activity?) and the specific
+    hypotheses being tested.\
+    Commonly used quantification metrics include:
+ 
+```{=html}
+<!-- -->
+```
+-   Peak Amplitude: The maximum (or minimum, for inhibitory responses)
+    value of the normalized signal (dF/F or Z-score) occurring within a
+    defined time window after the event onset.^5^
+ 
+-   Latency to Peak: The time elapsed from the event onset (time = 0) to
+    the occurrence of the peak amplitude.
+ 
+-   Duration of Response: The length of time for which the signal
+    remains significantly elevated (or suppressed) above a defined
+    threshold (e.g., 2 or 3 standard deviations from the mean of the
+    pre-event baseline).
+ 
+-   Area Under the Curve (AUC): The integral of the normalized signal
+    over a defined time window post-event (e.g., from event onset to +10
+    seconds). AUC can reflect the total change in ACh levels or the
+    overall strength and duration of the neural response. fpExplorer\'s
+    PeriEventOptionsWindow includes options for calculating \"AUC-pre\"
+    and \"AUC-post,\" indicating this quantification capability.^4^
+ 
+-   Rise Time / Decay Time (Kinetics): The time taken for the signal to
+    rise from baseline to its peak (or a certain percentage of the peak,
+    e.g., 10-90% rise time), and the time taken for the signal to decay
+    from the peak back towards baseline. Jing et al. (2020) mention
+    fitting rise and decay phases of fluorescence signals to
+    single-exponential functions to obtain time constants
+    (τ\<sub\>on\</sub\> and τ\<sub\>off\</sub\>) during sensor
+    characterization.^5^
+ 
+-   Frequency of Transients/Spikes: If the ACh signals manifest as
+    discrete, rapid \"spike-like\" events rather than, or in addition
+    to, slower modulations, their frequency (number of events per unit
+    time) within a defined window around the behavioral event can be a
+    relevant metric. fpExplorer includes a \"Spike Detection\" feature,
+    accessible via the PeakSettingsWindow and
+    AdvancedPeakSettingsWindow, which uses parameters such as prominence
+    and distance to identify such transients.^4^\
+    The nature of the ACh signal (e.g., a phasic burst, a sustained
+    elevation, or a brief inhibition) during different phases of feeding
+    will dictate the most informative quantification metrics. For
+    instance, if feeding onset triggers a sharp, brief increase in ACh,
+    then peak amplitude, latency to peak, and perhaps the frequency of
+    rapid transients would be key metrics. If, however, feeding is
+    associated with a more sustained elevation of ACh throughout the
+    consummatory period, then AUC over that consumption window or the
+    mean signal amplitude during this period might be more relevant than
+    a single peak value. It is advisable to first visually inspect the
+    average peri-event traces and heatmaps for each defined feeding
+    sub-event to understand the typical ACh signal dynamics. Based on
+    these observations, 2-3 key metrics that best capture these dynamics
+    should be selected for statistical comparison.\
+    **2.4. Statistical Approaches for Event-Related Data**\
+    Comparing quantified metrics across different conditions (e.g.,
+    feeding vs. baseline, palatable vs. standard chow) or groups
+    requires appropriate statistical tests.
+ 
+```{=html}
+<!-- -->
+```
+-   Basic Comparisons:
+ 
+    -   Paired t-tests or Wilcoxon signed-rank tests: These are suitable
+        for comparing a post-event metric (e.g., peak Z-score, AUC) to a
+        pre-event baseline value within the same group of animals.
+ 
+    -   Unpaired t-tests or Mann-Whitney U tests: Used for comparing
+        metrics between two independent groups of animals.
+ 
+    -   ANOVA (Analysis of Variance): For comparing metrics across more
+        than two groups or multiple conditions. Repeated measures ANOVA
+        is appropriate if comparing multiple conditions within the same
+        animals (e.g., response to different types of food). Post-hoc
+        tests (e.g., Tukey\'s, Bonferroni) are then used to identify
+        specific group/condition differences. Jing et al. (2020) report
+        using two-sided Student's t-tests for group differences.^5^
+ 
+```{=html}
+<!-- -->
+```
+-   Advanced Time-Series Analysis: While comparisons of summary metrics
+    are common, they inherently discard information about the temporal
+    evolution of the neural signal. More advanced statistical approaches
+    can analyze the entire peri-event time course.
+ 
+    -   Functional Linear Mixed Models (FLMM): This approach,
+        highlighted in recent literature ^15^, treats the entire
+        peri-event signal as a continuous function rather than reducing
+        it to a single summary statistic. FLMMs can model the signal at
+        each time point as a function of experimental variables (e.g.,
+        behavioral condition, trial number) while simultaneously
+        accounting for trial-to-trial variability and correlations
+        between data points within a trial. Crucially, they can
+        incorporate random effects to model between-animal differences.
+        This allows for hypothesis testing at *each time point* along
+        the peri-event window, identifying precisely *when* significant
+        differences emerge between conditions. FLMMs generally offer
+        increased statistical power and a more nuanced understanding of
+        temporal dynamics compared to traditional methods that rely on
+        summary statistics.^15^ The eLife paper by PNAS RP95802
+        specifically demonstrates that FLMM can reveal significant
+        effects obscured by standard analysis approaches.
+ 
+    -   Cluster-based permutation tests: This is another non-parametric
+        method suitable for comparing time series data between
+        conditions. It helps to address the multiple comparisons problem
+        that arises when testing for differences at many time points
+        across the peri-event window by identifying clusters of
+        temporally contiguous time points where a significant difference
+        exists.\
+        For producing rigorous and publishable findings, especially if
+        the ACh signals exhibit complex temporal dynamics or if the
+        effects are subtle, transitioning beyond simple summary
+        statistic comparisons to methods like FLMMs is increasingly
+        becoming the standard in the field. While fpExplorer itself may
+        not directly implement FLMMs (which typically require
+        specialized packages in R or Python), the trial-by-trial
+        peri-event traces exported from fpExplorer can serve as input
+        for such advanced statistical modeling. Investing time in
+        learning and applying these methods can significantly enhance
+        the quality, interpretability, and impact of the research
+        findings. If FLMMs are initially too complex to implement,
+        ensure that any summary-statistic comparisons are
+        well-justified, that the assumptions of the chosen statistical
+        tests are met, and that multiple relevant metrics (e.g., peak,
+        AUC, latency) are considered to provide a more complete picture
+        of the ACh response.\
+        **3. Comparative Evaluation: fpExplorer vs. MATLAB Scripts for
+        Your Research**\
+        This section provides a comparative evaluation of the fpExplorer
+        analysis tool and custom MATLAB scripts, contextualized by the
+        specific research needs of analyzing ACh signals during feeding
+        and other behaviors, and guided by principles of \"industry
+        standard\" and \"correctness.\"\
+        **3.1. fpExplorer Analysis Workflow: Strengths and
+        Limitations**\
+        Based on the provided codebase information for fpExplorer ^4^,
+        its key functionalities and characteristics can be outlined.
+ 
+```{=html}
+<!-- -->
+```
+-   Data Input and Management:
+ 
+    -   fpExplorer supports direct import of TDT data, recognizing its
+        proprietary folder structure (containing .Tbk, .Tdx, .tev files,
+        etc., as shown in the example data structure ^4^). This is a
+        major convenience for users of TDT recording systems.
+ 
+    -   It also allows the import of generic CSV files for both signal
+        data and event data, offering flexibility for integrating data
+        from other acquisition systems or manually processed/annotated
+        data.
+ 
+    -   The fpVideoCreator module facilitates synchronization of video
+        recordings with photometry data, which is highly beneficial for
+        behavioral studies.^4^
+ 
+```{=html}
+<!-- -->
+```
+-   Core Signal Processing and Normalization Modules:
+ 
+    -   The fpExplorer_functions.py script contains central functions
+        for data processing, including get_raw_data, trim_raw_data,
+        downsample, normalize_dff (likely implementing the \"Modified
+        Polynomial Fitting\"), normalize_pMat (implementing the
+        \"Standard Polynomial Fitting,\" inspired by David Barker\'s
+        pMAT tool), and show_polynomial_fitting for visualizing these
+        fits.^4^
+ 
+    -   \"Standard Polynomial Fitting\": This method likely involves
+        fitting the 405nm control channel data to the 465nm signal
+        channel data using a polynomial regression. This fit aims to
+        model and remove shared artifacts (motion, photobleaching). The
+        resulting corrected signal is then used as the basis for dF/F
+        calculation or subsequent Z-scoring.
+ 
+    -   \"Modified Polynomial Fitting\": Contributed by Patrick
+        Mulholland ^4^, this suggests an alternative or refined
+        polynomial-based approach to normalization. The specific
+        modifications are not detailed in the provided snippets but
+        imply an effort to improve upon the standard method, possibly by
+        altering the fitting procedure or the definition of F0.
+ 
+    -   Z-Score Calculation: fpExplorer can calculate Z-scores,
+        typically applied to a trace that has already undergone some
+        form of normalization (e.g., via the polynomial fitting methods,
+        resulting in a dF/F-like trace). The baseline window for Z-score
+        calculation can be user-defined, particularly in the batch
+        processing mode.^4^
+ 
+    -   Filtering: A smoothing filter, likely a moving average, is
+        available via the filter_window parameter.^4^
+ 
+```{=html}
+<!-- -->
+```
+-   Event Handling and Peri-Event Analysis:
+ 
+    -   The PreviewEventBasedWidget is designed for analyzing data
+        aligned to discrete events, whether these are TDT system epoc
+        markers (e.g., \"Note 1\", \"PrtA 253\") or events imported from
+        a CSV file.^4^
+ 
+    -   The PreviewContinuousWidget allows for the analysis of whole
+        trace data.
+ 
+    -   The PeriEventOptionsWindow enables users to define peri-event
+        windows (time before and after event), baseline periods for AUC
+        calculation, and parameters for AUC pre/post quantification.^4^
+ 
+```{=html}
+<!-- -->
+```
+-   Quantification Capabilities:
+ 
+    -   Spike/Transient Detection: The PeakSettingsWindow and
+        AdvancedPeakSettingsWindow provide tools for detecting discrete
+        \"spike-like\" transients in the signal, using parameters such
+        as prominence and inter-peak distance. It also allows for
+        defining specific time windows for separate spike counts.^4^
+ 
+    -   AUC Calculation: As mentioned, AUC can be quantified for
+        peri-event windows.
+ 
+```{=html}
+<!-- -->
+```
+-   Visualization:
+ 
+    -   fpExplorer utilizes MplCanvas (a Matplotlib-based canvas) for
+        generating plots, with a NavigationToolbar for user interaction
+        (zooming, panning).^4^
+ 
+    -   It can display raw signals, downsampled traces, normalized
+        signals (dF/F or Z-score), and peri-event averaged data.
+ 
+```{=html}
+<!-- -->
+```
+-   Batch Processing:
+ 
+    -   The RunOnBatchWindow allows users to apply a consistent set of
+        analysis parameters (e.g., trimming, normalization choices,
+        export options for raw, normalized, peri-event, and spike data)
+        across multiple subjects or recording sessions.^4^
+ 
+```{=html}
+<!-- -->
+```
+-   Assessed Strengths of fpExplorer:
+ 
+    -   User-Friendly GUI: The graphical interface makes complex
+        analysis steps more accessible, especially for researchers who
+        may not have extensive programming expertise.
+ 
+    -   Integrated Workflow: It offers a relatively complete workflow
+        from data import (TDT and CSV) through preprocessing,
+        normalization, event alignment, basic quantification, and
+        visualization, including the valuable fpVideoCreator for
+        behavior synchronization.
+ 
+    -   Attempt at Standardization: By providing a defined set of
+        analysis options, it promotes consistency in how data is
+        processed within a lab or project.
+ 
+    -   Open Source (GPL v3 License): The availability of the source
+        code ^4^ allows for transparency and the potential for users
+        proficient in Python to inspect, modify, or extend its
+        functionalities.
+ 
+    -   Direct TDT Data Support: This is a significant convenience for
+        laboratories using TDT recording systems.
+ 
+```{=html}
+<!-- -->
+```
+-   Assessed Limitations of fpExplorer (based on provided information
+    and common challenges):
+ 
+    -   Algorithm Transparency and Advanced Customization: While the
+        code is open source, the precise mathematical details and
+        assumptions underlying the \"Standard Polynomial Fitting\" and
+        particularly the \"Modified Polynomial Fitting\" are not fully
+        elucidated in the README or high-level descriptions.^4^
+        Understanding these is crucial for evaluating their robustness
+        against state-of-the-art methods (e.g., IRLS for motion
+        correction, specific F0 estimation strategies discussed by Jing
+        et al. ^5^). Modifying these core algorithms or implementing
+        entirely new ones (e.g., IRLS) within fpExplorer would require
+        significant Python programming expertise.
+ 
+    -   Advanced Statistical Analysis: fpExplorer appears to focus
+        primarily on data preprocessing, visualization, and basic
+        quantification. It does not seem to have integrated capabilities
+        for advanced statistical modeling (e.g., FLMMs). Such analyses
+        would necessitate exporting the processed data to other software
+        environments.
+ 
+    -   Event Naming Constraint (as per README): The note that
+        \"Currently supported events are only the ones that don\'t start
+        with Cam or Tick\" ^4^ might impose a minor restriction on how
+        users name their behavioral events if they intend to use these
+        specific prefixes.
+ 
+    -   TDT Folder Structure Requirement (as per README): For direct TDT
+        data import, fpExplorer expects a specific folder organization,
+        which users must adhere to.^4^\
+        **3.2. MATLAB Script Workflow: Strengths and Limitations**\
+        While the specific MATLAB scripts used by the researcher were
+        not available for direct review ^12^, a general assessment of
+        MATLAB\'s capabilities for fiber photometry analysis can be
+        made.
+ 
+```{=html}
+<!-- -->
+```
+-   Typical Capabilities and Workflow in MATLAB:
+ 
+    -   Data Input: TDT data is commonly imported using the TDTbin2mat
+        function or similar utilities provided by TDT. CSV and other
+        text-based data formats are readily handled by MATLAB\'s
+        built-in functions.
+ 
+    -   Signal Processing: MATLAB is a powerful environment for
+        numerical computation and signal processing, offering extensive
+        built-in functions and toolboxes. Users can implement:
+ 
+        -   A wide array of digital filters (e.g., Butterworth,
+            Chebyshev, FIR, IIR, moving average) with precise control
+            over filter order, cutoff frequencies, and other parameters.
+ 
+        -   Various algorithms for motion artifact correction using the
+            isosbestic channel, ranging from simple linear scaling and
+            OLS polynomial fitting to more sophisticated robust methods
+            like IRLS.
+ 
+        -   Diverse and customizable F0 estimation methods for dF/F
+            calculation, including fitting exponential decay functions,
+            polynomial fitting to the corrected signal or the control
+            signal, using moving windows for local baseline estimation,
+            or implementing specific strategies from the literature.
+ 
+        -   Flexible Z-score calculations with user-defined baseline
+            periods and criteria.
+ 
+    ```{=html}
+    <!-- -->
+    ```
+    -   Event Handling and Peri-Event Analysis: Custom scripts are
+        typically written to import behavioral event timestamps, align
+        them with the photometry data streams, extract peri-event
+        epochs, and perform averaging or generate heatmaps.
+ 
+    -   Quantification: MATLAB\'s programming environment allows for the
+        implementation of custom algorithms for any desired
+        quantification metric, such as peak detection (e.g., using the
+        findpeaks function with its numerous parameters), AUC
+        calculation, latencies, durations, and analysis of signal
+        kinetics.
+ 
+    -   Visualization: MATLAB provides extensive and highly customizable
+        plotting capabilities for generating publication-quality
+        figures.
+ 
+    -   Statistical Analysis: MATLAB includes the Statistics and Machine
+        Learning Toolbox for a wide range of statistical tests and
+        modeling. Data can also be easily exported to other specialized
+        statistical software packages like R or SPSS.
+ 
+```{=html}
+<!-- -->
+```
+-   Assessed Strengths of MATLAB:
+ 
+    -   Maximum Algorithmic Flexibility and Control: This is MATLAB\'s
+        primary advantage. Researchers can implement or adapt any
+        published analysis method or develop novel algorithms precisely
+        tailored to their specific data characteristics and scientific
+        hypotheses. This is particularly important for employing
+        state-of-the-art techniques that may not yet be available in
+        packaged software.
+ 
+    -   Precision in Parameterization: Every step of the analysis
+        pipeline can be minutely controlled, and all parameters can be
+        explicitly defined and documented within the scripts.
+ 
+    -   Extensive Toolboxes and Community Support: A vast ecosystem of
+        official and community-contributed toolboxes exists for signal
+        processing, image analysis, statistical analysis, and more. The
+        large neuroscience community using MATLAB provides a
+        wealth_of_shared knowledge and code.
+ 
+    -   Mature Development Environment: MATLAB offers a robust
+        environment for developing, debugging, and validating complex
+        analysis code.
+ 
+```{=html}
+<!-- -->
+```
+-   Assessed Limitations of MATLAB:
+ 
+    -   Programming Expertise Required: Developing and maintaining
+        custom MATLAB scripts for comprehensive fiber photometry
+        analysis demands significant programming skills and a good
+        understanding of signal processing principles.
+ 
+    -   Time-Intensive Development: Creating a full analysis pipeline
+        from scratch, including data import, preprocessing,
+        normalization, event alignment, quantification, and
+        visualization, can be a very time-consuming endeavor.
+ 
+    -   Risk of \"Black Box\" or Idiosyncratic Code: If custom scripts
+        are not meticulously documented, validated, and potentially
+        shared, they can become \"black boxes\" that hinder
+        reproducibility and make it difficult to compare results across
+        different labs or even different projects within the same lab.
+ 
+    -   GUI and Integrated Video Analysis: Developing user-friendly
+        graphical interfaces or seamlessly integrating video analysis
+        tools within a custom MATLAB pipeline requires substantial
+        additional development effort compared to using a pre-built,
+        integrated solution like fpExplorer.\
+        **3.3. \"Industry Standard\" and \"Correctness\" in the Context
+        of Fiber Photometry Analysis**\
+        The terms \"industry standard\" and \"correctness\" in
+        scientific research refer to methodologies that are widely
+        adopted, rigorously validated, well-documented in peer-reviewed
+        literature, and fundamentally sound in their application of
+        scientific principles.
+ 
+```{=html}
+<!-- -->
+```
+-   Evolving \"Industry Standards\" in Fiber Photometry: Key elements
+    that are increasingly considered standard for high-quality fiber
+    photometry analysis include ^1^:
+ 
+    1.  Use of an Isosbestic Control Channel: This is fundamental for
+        addressing motion artifacts.
+ 
+    2.  Robust Motion Correction Fitting: Methods that accurately
+        separate neural signals from artifacts, with a growing
+        recognition that robust regression techniques (like IRLS) can be
+        superior to simple OLS fitting when neural activity and motion
+        might be correlated.^2^
+ 
+    3.  Careful and Justified Normalization: Transparent reporting and
+        appropriate selection of dF/F (with a well-defined F0) or
+        Z-score (with a well-defined baseline) based on the specific
+        research question and data characteristics.^13^
+ 
+    4.  Appropriate Statistical Analysis: Employing statistical methods
+        that account for the data structure (e.g., repeated measures,
+        time-series nature, within- and between-subject variability),
+        with a trend towards more sophisticated models like FLMMs.^15^
+ 
+    5.  Comprehensive Methodological Reporting: Detailed description of
+        all analysis steps, parameters, and software used to ensure
+        reproducibility.
+ 
+-   Assessing \"Correctness\":
+ 
+    1.  fpExplorer: The \"correctness\" of fpExplorer\'s analyses hinges
+        significantly on the specific algorithms implemented for its
+        \"Standard Polynomial Fitting\" and, particularly, its
+        \"Modified Polynomial Fitting.\" If the \"Modified\" version
+        effectively implements principles of robust regression or
+        employs a highly validated F0 estimation strategy, it could
+        achieve a high degree of \"correctness.\" The structured nature
+        of fpExplorer can also reduce the likelihood of user error in
+        applying a consistent pipeline. However, if its core fitting
+        routines are based on simple OLS without adequately addressing
+        the potential confounding of neural signals with motion
+        artifacts, its \"correctness\" might be compromised for datasets
+        where such correlations are strong.
+ 
+    2.  MATLAB Scripts: MATLAB offers the *potential* to achieve maximal
+        \"correctness\" because any algorithm, including the most
+        current and sophisticated ones described in the literature, can
+        be implemented. However, the actual \"correctness\" is entirely
+        dependent on the user\'s ability to accurately code, validate,
+        and apply these methods. A flawed or inappropriately applied
+        custom MATLAB script can lead to less \"correct\" results than a
+        well-vetted, standardized tool.
+ 
++-------------+-------------+-------------+-------------+-------------+
+| -   Jing et | fpExplorer  | Typical     | Jing et al. | Best        |
+|             | (ilo21-     | Custom      | (2020)      | P           |
+|  al. (2020) | fpexplorer) | MATLAB      | Approach    | ractice/Rec |
+|     as a    |             | Scripts     |             | ommendation |
+|     H       |             |             |             | & Rationale |
+| igh-Quality |             |             |             |             |
+|             |             |             |             |             |
+|  Benchmark: |             |             |             |             |
+|     The     |             |             |             |             |
+|     methods |             |             |             |             |
+|             |             |             |             |             |
+|    detailed |             |             |             |             |
+|     by Jing |             |             |             |             |
+|     et al.  |             |             |             |             |
+|     ^5^     |             |             |             |             |
+|     (e.g.,  |             |             |             |             |
+|     linear  |             |             |             |             |
+|             |             |             |             |             |
+|  regression |             |             |             |             |
+|     for     |             |             |             |             |
+|             |             |             |             |             |
+|  isosbestic |             |             |             |             |
+|             |             |             |             |             |
+|    scaling, |             |             |             |             |
+|     a       |             |             |             |             |
+|             |             |             |             |             |
+|    specific |             |             |             |             |
+|             |             |             |             |             |
+|    approach |             |             |             |             |
+|     to F0   |             |             |             |             |
+|             |             |             |             |             |
+|  definition |             |             |             |             |
+|     for     |             |             |             |             |
+|     dF/F,   |             |             |             |             |
+|     and     |             |             |             |             |
+|     contex  |             |             |             |             |
+| t-dependent |             |             |             |             |
+|     use of  |             |             |             |             |
+|             |             |             |             |             |
+|   Z-scores) |             |             |             |             |
+|     were    |             |             |             |             |
+|             |             |             |             |             |
+|   published |             |             |             |             |
+|     in      |             |             |             |             |
+|     *Nature |             |             |             |             |
+|             |             |             |             |             |
+|   Methods*, |             |             |             |             |
+|     a       |             |             |             |             |
+|             |             |             |             |             |
+| high-impact |             |             |             |             |
+|             |             |             |             |             |
+|    journal, |             |             |             |             |
+|             |             |             |             |             |
+|  indicating |             |             |             |             |
+|     that    |             |             |             |             |
+|     they    |             |             |             |             |
+|     met     |             |             |             |             |
+|             |             |             |             |             |
+|    rigorous |             |             |             |             |
+|             |             |             |             |             |
+|   standards |             |             |             |             |
+|     for     |             |             |             |             |
+|     \"co    |             |             |             |             |
+| rrectness\" |             |             |             |             |
+|     and     |             |             |             |             |
+|     met     |             |             |             |             |
+| hodological |             |             |             |             |
+|             |             |             |             |             |
+|   soundness |             |             |             |             |
+|     at the  |             |             |             |             |
+|     time of |             |             |             |             |
+|     p       |             |             |             |             |
+| ublication. |             |             |             |             |
+|     The aim |             |             |             |             |
+|     should  |             |             |             |             |
+|     be to   |             |             |             |             |
+|     achieve |             |             |             |             |
+|     a       |             |             |             |             |
+|             |             |             |             |             |
+|  comparable |             |             |             |             |
+|     level   |             |             |             |             |
+|     of      |             |             |             |             |
+|     rigor,  |             |             |             |             |
+|     while   |             |             |             |             |
+|     also    |             |             |             |             |
+|     in      |             |             |             |             |
+| corporating |             |             |             |             |
+|     newer   |             |             |             |             |
+|     be      |             |             |             |             |
+| st-practice |             |             |             |             |
+|             |             |             |             |             |
+|    insights |             |             |             |             |
+|     (such   |             |             |             |             |
+|     as the  |             |             |             |             |
+|             |             |             |             |             |
+|    benefits |             |             |             |             |
+|     of IRLS |             |             |             |             |
+|     for     |             |             |             |             |
+|     motion  |             |             |             |             |
+|             |             |             |             |             |
+| correction) |             |             |             |             |
+|     where   |             |             |             |             |
+|     a       |             |             |             |             |
+| pplicable.\ |             |             |             |             |
+|             |             |             |             |             |
+| Ultimately, |             |             |             |             |
+|             |             |             |             |             |
+|  fpExplorer |             |             |             |             |
+|             |             |             |             |             |
+|    provides |             |             |             |             |
+|     a       |             |             |             |             |
+|             |             |             |             |             |
+|    valuable |             |             |             |             |
+|             |             |             |             |             |
+|   framework |             |             |             |             |
+|     for     |             |             |             |             |
+|             |             |             |             |             |
+|   promoting |             |             |             |             |
+|             |             |             |             |             |
+| consistency |             |             |             |             |
+|     and     |             |             |             |             |
+|     ac      |             |             |             |             |
+| cessibility |             |             |             |             |
+|     in      |             |             |             |             |
+|     fiber   |             |             |             |             |
+|             |             |             |             |             |
+|  photometry |             |             |             |             |
+|             |             |             |             |             |
+|   analysis. |             |             |             |             |
+|     Its     |             |             |             |             |
+|     \"cor   |             |             |             |             |
+| rectness,\" |             |             |             |             |
+|             |             |             |             |             |
+|  especially |             |             |             |             |
+|             |             |             |             |             |
+|  concerning |             |             |             |             |
+|     the     |             |             |             |             |
+|             |             |             |             |             |
+|    critical |             |             |             |             |
+|     step of |             |             |             |             |
+|     motion  |             |             |             |             |
+|             |             |             |             |             |
+|    artifact |             |             |             |             |
+|             |             |             |             |             |
+| correction, |             |             |             |             |
+|     depends |             |             |             |             |
+|     on the  |             |             |             |             |
+|             |             |             |             |             |
+|    detailed |             |             |             |             |
+|     imp     |             |             |             |             |
+| lementation |             |             |             |             |
+|     of its  |             |             |             |             |
+|     fitting |             |             |             |             |
+|             |             |             |             |             |
+| algorithms. |             |             |             |             |
+|     MATLAB, |             |             |             |             |
+|     on the  |             |             |             |             |
+|     other   |             |             |             |             |
+|     hand,   |             |             |             |             |
+|             |             |             |             |             |
+|    provides |             |             |             |             |
+|     the     |             |             |             |             |
+|     u       |             |             |             |             |
+| nparalleled |             |             |             |             |
+|             |             |             |             |             |
+| flexibility |             |             |             |             |
+|     to      |             |             |             |             |
+|             |             |             |             |             |
+|   implement |             |             |             |             |
+|     the     |             |             |             |             |
+|     most    |             |             |             |             |
+|             |             |             |             |             |
+| \"correct\" |             |             |             |             |
+|     and     |             |             |             |             |
+|             |             |             |             |             |
+|    advanced |             |             |             |             |
+|             |             |             |             |             |
+| algorithms, |             |             |             |             |
+|     but     |             |             |             |             |
+|     this    |             |             |             |             |
+|     places  |             |             |             |             |
+|     a       |             |             |             |             |
+|     greater |             |             |             |             |
+|     burden  |             |             |             |             |
+|     of      |             |             |             |             |
+|             |             |             |             |             |
+|  expertise, |             |             |             |             |
+|             |             |             |             |             |
+| development |             |             |             |             |
+|     time,   |             |             |             |             |
+|     and     |             |             |             |             |
+|             |             |             |             |             |
+|  validation |             |             |             |             |
+|     on the  |             |             |             |             |
+|     user.   |             |             |             |             |
+|     For the |             |             |             |             |
+|     current |             |             |             |             |
+|             |             |             |             |             |
+|   research, |             |             |             |             |
+|     a       |             |             |             |             |
+|             |             |             |             |             |
+|    thorough |             |             |             |             |
+|     un      |             |             |             |             |
+| derstanding |             |             |             |             |
+|     of      |             |             |             |             |
+|     fp      |             |             |             |             |
+| Explorer\'s |             |             |             |             |
+|             |             |             |             |             |
+|  \"Modified |             |             |             |             |
+|             |             |             |             |             |
+|  Polynomial |             |             |             |             |
+|             |             |             |             |             |
+|   Fitting\" |             |             |             |             |
+|     is      |             |             |             |             |
+|             |             |             |             |             |
+|  essential. |             |             |             |             |
+|     If      |             |             |             |             |
+|     doubts  |             |             |             |             |
+|     remain  |             |             |             |             |
+|     about   |             |             |             |             |
+|     its     |             |             |             |             |
+|             |             |             |             |             |
+|  robustness |             |             |             |             |
+|     for the |             |             |             |             |
+|             |             |             |             |             |
+|    specific |             |             |             |             |
+|     dataset |             |             |             |             |
+|     (e.g.,  |             |             |             |             |
+|     if      |             |             |             |             |
+|             |             |             |             |             |
+| significant |             |             |             |             |
+|             |             |             |             |             |
+|    movement |             |             |             |             |
+|     is      |             |             |             |             |
+|             |             |             |             |             |
+|    observed |             |             |             |             |
+|     to      |             |             |             |             |
+|             |             |             |             |             |
+|   correlate |             |             |             |             |
+|     with    |             |             |             |             |
+|     feed    |             |             |             |             |
+| ing-related |             |             |             |             |
+|     ACh     |             |             |             |             |
+|             |             |             |             |             |
+|   signals), |             |             |             |             |
+|             |             |             |             |             |
+|   utilizing |             |             |             |             |
+|     MATLAB  |             |             |             |             |
+|     for the |             |             |             |             |
+|     core    |             |             |             |             |
+|     motion  |             |             |             |             |
+|             |             |             |             |             |
+|  correction |             |             |             |             |
+|     and F0  |             |             |             |             |
+|             |             |             |             |             |
+|  estimation |             |             |             |             |
+|     steps,  |             |             |             |             |
+|     and     |             |             |             |             |
+|     then    |             |             |             |             |
+|             |             |             |             |             |
+|   importing |             |             |             |             |
+|     the     |             |             |             |             |
+|             |             |             |             |             |
+|   processed |             |             |             |             |
+|     data    |             |             |             |             |
+|     into    |             |             |             |             |
+|             |             |             |             |             |
+|  fpExplorer |             |             |             |             |
+|     for     |             |             |             |             |
+|             |             |             |             |             |
+|  subsequent |             |             |             |             |
+|     event   |             |             |             |             |
+|             |             |             |             |             |
+|   alignment |             |             |             |             |
+|     and     |             |             |             |             |
+|     vis     |             |             |             |             |
+| ualization, |             |             |             |             |
+|     could   |             |             |             |             |
+|             |             |             |             |             |
+|   represent |             |             |             |             |
+|     an      |             |             |             |             |
+|     optimal |             |             |             |             |
+|     path to |             |             |             |             |
+|             |             |             |             |             |
+|   achieving |             |             |             |             |
+|     both    |             |             |             |             |
+|     rigor   |             |             |             |             |
+|     and     |             |             |             |             |
+|             |             |             |             |             |
+| efficiency. |             |             |             |             |
+|     An      |             |             |             |             |
+|             |             |             |             |             |
+| enhancement |             |             |             |             |
+|     to      |             |             |             |             |
+|             |             |             |             |             |
+|  fpExplorer |             |             |             |             |
+|     that    |             |             |             |             |
+|     i       |             |             |             |             |
+| ncorporates |             |             |             |             |
+|     an      |             |             |             |             |
+|             |             |             |             |             |
+|    explicit |             |             |             |             |
+|     IRLS    |             |             |             |             |
+|     fitting |             |             |             |             |
+|     option  |             |             |             |             |
+|     would   |             |             |             |             |
+|     si      |             |             |             |             |
+| gnificantly |             |             |             |             |
+|     bolster |             |             |             |             |
+|     its     |             |             |             |             |
+|     \"co    |             |             |             |             |
+| rrectness\" |             |             |             |             |
+|     for a   |             |             |             |             |
+|     broader |             |             |             |             |
+|     range   |             |             |             |             |
+|     of      |             |             |             |             |
+|     e       |             |             |             |             |
+| xperimental |             |             |             |             |
+|     c       |             |             |             |             |
+| onditions.\ |             |             |             |             |
+|     **3.4.  |             |             |             |             |
+|             |             |             |             |             |
+| Comparative |             |             |             |             |
+|             |             |             |             |             |
+|    Analysis |             |             |             |             |
+|     of      |             |             |             |             |
+|     Tools   |             |             |             |             |
+|     and     |             |             |             |             |
+|     Metho   |             |             |             |             |
+| dologies**\ |             |             |             |             |
+|     To      |             |             |             |             |
+|     provide |             |             |             |             |
+|     a clear |             |             |             |             |
+|             |             |             |             |             |
+|   overview, |             |             |             |             |
+|     the     |             |             |             |             |
+|             |             |             |             |             |
+|   following |             |             |             |             |
+|     table   |             |             |             |             |
+|             |             |             |             |             |
+|    compares |             |             |             |             |
+|             |             |             |             |             |
+| fpExplorer, |             |             |             |             |
+|     typical |             |             |             |             |
+|     custom  |             |             |             |             |
+|     MATLAB  |             |             |             |             |
+|     script  |             |             |             |             |
+|     ca      |             |             |             |             |
+| pabilities, |             |             |             |             |
+|     the     |             |             |             |             |
+|             |             |             |             |             |
+|    approach |             |             |             |             |
+|     of Jing |             |             |             |             |
+|     et al.  |             |             |             |             |
+|     (2020), |             |             |             |             |
+|     and     |             |             |             |             |
+|     general |             |             |             |             |
+|     best    |             |             |             |             |
+|             |             |             |             |             |
+|   practices |             |             |             |             |
+|     for key |             |             |             |             |
+|     fiber   |             |             |             |             |
+|             |             |             |             |             |
+|  photometry |             |             |             |             |
+|             |             |             |             |             |
+|    analysis |             |             |             |             |
+|     steps.  |             |             |             |             |
+|             |             |             |             |             |
+| Featu       |             |             |             |             |
+| re/Analysis |             |             |             |             |
+| Step        |             |             |             |             |
++-------------+-------------+-------------+-------------+-------------+
+| Data Input  | TDT native  | TDTbin2mat  | AAVs, fiber | Flexible    |
+| &           | structure,  | for TDT,    | im          | input (TDT, |
+| Management  | CSV.        | CSV. Video  | plantation, | CSV).       |
+|             | fpV         | sync often  | TDT RZ2     | Integrated  |
+|             | ideoCreator | custo       | system. TTL | video sync  |
+|             | for video   | m/separate. | for sync.   | is highly   |
+|             | sync.       |             |             | desirable   |
+|             |             |             |             | for         |
+|             |             |             |             | behavioral  |
+|             |             |             |             | studies.    |
++-------------+-------------+-------------+-------------+-------------+
+| Motion      | Control     | Control     | 405nm       | Use         |
+| Artifact    | channel     | channel.    | control.    | isosbestic  |
+| Correction  | (405nm).    | Us          | Scaled to   | control.    |
+| (           | \"Standard  | er-defined: | 465nm via   | IRLS        |
+| Isosbestic) | Polynomial  | Linear      | linear      | regression  |
+|             | Fitting,\"  | scaling,    | regression, | is          |
+|             | \"Modified  | OLS         | then        | recommended |
+|             | Polynomial  | Polynomial, | subtracted. | over OLS if |
+|             | Fitting.\"  | IRLS, etc.  |             | neural      |
+|             | (norm       |             |             | activity    |
+|             | alize_pMat, |             |             | and motion  |
+|             | norm        |             |             | may         |
+|             | alize_dff). |             |             | correlate,  |
+|             |             |             |             | to prevent  |
+|             |             |             |             | signal      |
+|             |             |             |             | atte        |
+|             |             |             |             | nuation.^2^ |
+|             |             |             |             | Polynomial  |
+|             |             |             |             | degree      |
+|             |             |             |             | should be   |
+|             |             |             |             | justified.  |
++-------------+-------------+-------------+-------------+-------------+
+| Photoblea   | Primarily   | Custom:     | BEADS       | Robust      |
+| ching/Drift | via         | Part of     | script      | fitting of  |
+| Correction  | polynomial  | isosbestic  | (0.0005     | control     |
+|             | fit of      | fit,        | cy          | channel     |
+|             | control to  | separate    | cles/sample | (e.g.,      |
+|             | signal.     | exponential | cut-off)    | IRLS) often |
+|             |             | /polynomial | for slow    | handles     |
+|             |             | detrending, | drift.      | this well.  |
+|             |             | filtering   | Isosbestic  | If not, a   |
+|             |             | (e.g.,      | scaling     | separate,   |
+|             |             | B           | also        | gentle      |
+|             |             | EADS-like). | c           | detrend     |
+|             |             |             | ontributes. | (e.g.,      |
+|             |             |             |             | high-pass   |
+|             |             |             |             | filter or   |
+|             |             |             |             | bi-         |
+|             |             |             |             | exponential |
+|             |             |             |             | fit to      |
+|             |             |             |             | corrected   |
+|             |             |             |             | signal) may |
+|             |             |             |             | be needed.  |
+|             |             |             |             | Avoid       |
+|             |             |             |             | aggressive  |
+|             |             |             |             | detrending  |
+|             |             |             |             | that        |
+|             |             |             |             | removes     |
+|             |             |             |             | slow neural |
+|             |             |             |             | signals.    |
++-------------+-------------+-------------+-------------+-------------+
+| Signal      | Moving      | Us          | 6 Hz        | Low-pass    |
+| Filtering   | average     | er-defined: | low-pass    | filter      |
+|             | filter      | Low-pass    | (Quebec     | appropriate |
+|             | (fi         | (e.g.,      | system); 20 | for sensor  |
+|             | lter_window | Bu          | Hz low-pass | kinetics    |
+|             | parameter). | tterworth), | (TDT        | (e.g.,      |
+|             |             | moving      | de          | 10-20 Hz    |
+|             |             | average,    | modulated). | for         |
+|             |             | median,     |             | ACh3.0).    |
+|             |             | etc. Full   |             | Apply       |
+|             |             | parameter   |             | minimally   |
+|             |             | control.    |             | to avoid    |
+|             |             |             |             | distorting  |
+|             |             |             |             | true signal |
+|             |             |             |             | d           |
+|             |             |             |             | ynamics.^2^ |
++-------------+-------------+-------------+-------------+-------------+
+| dF/F        | F0 derived  | Us          | F0 from 2nd | F0 should   |
+| No          | from        | er-defined: | order       | be robustly |
+| rmalization | polynomial  | Fit to      | exponential | estimated   |
+| (F0         | fit         | corrected   | fit to      | from the    |
+| Estimation) | (Standard   | signal, fit | autof       | motio       |
+|             | or          | to control  | luorescence | n-corrected |
+|             | Modified)   | signal      | -subtracted | signal.     |
+|             | to          | (e.g.,      | data.       | Using the   |
+|             | motio       | (Signal-    |             | fitted      |
+|             | n-corrected | FitControl) |             | control     |
+|             | signal.     | /FitControl |             | channel as  |
+|             |             | ^2^),       |             | F0 is a     |
+|             |             | exponential |             | strong      |
+|             |             | fit, moving |             | a           |
+|             |             | window on   |             | pproach.^2^ |
+|             |             | corrected   |             | Method must |
+|             |             | signal.     |             | account for |
+|             |             |             |             | phot        |
+|             |             |             |             | obleaching. |
++-------------+-------------+-------------+-------------+-------------+
+| Z-Score     | Calculated  | U           | Normalized  | Baseline    |
+| No          | from        | ser-defined | to NREM     | period must |
+| rmalization | normalized  | baseline    | sleep SD    | be          |
+| (Baseline   | trace.      | period      | for some    | carefully   |
+| Definition) | Baseline    | (pre-event, | analyses.   | chosen,     |
+|             | window      | quiescent   |             | stable, and |
+|             | use         | period,     |             | rep         |
+|             | r-definable | whole trace |             | resentative |
+|             | in batch    | segment).   |             | of true     |
+|             | mode.       | Applied to  |             | baseline    |
+|             |             | dF/F or     |             | activity.   |
+|             |             | other       |             | Pre-event   |
+|             |             | processed   |             | window      |
+|             |             | trace.      |             | common for  |
+|             |             |             |             | ev          |
+|             |             |             |             | ent-related |
+|             |             |             |             | analysis.   |
+|             |             |             |             | Critiqued   |
+|             |             |             |             | for         |
+|             |             |             |             | spontaneous |
+|             |             |             |             | s           |
+|             |             |             |             | ignals.^13^ |
++-------------+-------------+-------------+-------------+-------------+
+| Event       | TDT epocs,  | Custom      | TTL for     | Precise,    |
+| Definition  | CSV events. | scripts for | foot-shock. | consistent  |
+| & Alignment | Pr          | importi     | Precise     | definitions |
+|             | eviewEventB | ng/defining | alignment   | crucial.    |
+|             | asedWidget. | events from | for complex | S           |
+|             |             | various     | tasks       | ub-dividing |
+|             |             | sources     | implied.    | complex     |
+|             |             | (manual     |             | behaviors   |
+|             |             | logs,       |             | (like       |
+|             |             | behavior    |             | feeding)    |
+|             |             | software    |             | into        |
+|             |             | TTLs).      |             | components  |
+|             |             |             |             | is          |
+|             |             |             |             | r           |
+|             |             |             |             | ecommended. |
+|             |             |             |             | Automated   |
+|             |             |             |             | behavioral  |
+|             |             |             |             | tracking    |
+|             |             |             |             | can aid     |
+|             |             |             |             | consistency |
+|             |             |             |             | if          |
+|             |             |             |             | validated.  |
++-------------+-------------+-------------+-------------+-------------+
+| Peri-Event  | Averaging   | Custom      | Peri-event  | Both        |
+| Analysis &  | (Pre        | scripts for | plots (mean | averaged    |
+| Vi          | viewEventBa | averaging,  | ± SEM) and  | traces      |
+| sualization | sedWidget). | heatmaps,   | heatmaps    | (with       |
+|             | MplCanvas   | tri         | are         | SEM/CI) and |
+|             | for plots.  | al-by-trial | standard.   | heatmaps    |
+|             |             | plots.      |             | are         |
+|             |             | Highly      |             | essential.  |
+|             |             | c           |             | Heatmaps    |
+|             |             | ustomizable |             | reveal      |
+|             |             | vis         |             | tri         |
+|             |             | ualization. |             | al-to-trial |
+|             |             |             |             | vari        |
+|             |             |             |             | ability.^7^ |
++-------------+-------------+-------------+-------------+-------------+
+| Signal      | PeakSet     | Custom      | Peak        | Choice of   |
+| Qua         | tingsWindow | scripts for | response,   | metric      |
+| ntification | (           | peak        | kinetics    | depends on  |
+|             | prominence, | (amplitude, | (rise/decay | signal      |
+|             | distance    | latency),   | times),     | morphology  |
+|             | for         | duration,   | AUC.        | and         |
+|             | spikes).    | AUC,        |             | hypothesis  |
+|             | PeriEventOp | rise/decay  |             | (peak,      |
+|             | tionsWindow | kinetics,   |             | latency,    |
+|             | (AUC        | frequency   |             | AUC,        |
+|             | pre/post).  | of          |             | duration,   |
+|             |             | transients. |             | frequency). |
+|             |             |             |             | For ACh,    |
+|             |             |             |             | kinetics    |
+|             |             |             |             | and AUC can |
+|             |             |             |             | be very     |
+|             |             |             |             | i           |
+|             |             |             |             | nformative. |
++-------------+-------------+-------------+-------------+-------------+
+| Batch       | RunOn       | Dependent   | Not         | Essential   |
+| Processing  | BatchWindow | on user     | explicitly  | for         |
+| C           | for         | scripting   | detailed    | efficiency  |
+| apabilities | applying    | ca          | for batch   | with larger |
+|             | settings to | pabilities. | processing  | datasets.   |
+|             | multiple    | Can be      | in provided | Ensures     |
+|             | subject     | highly      | snippets,   | consistent  |
+|             | s/sessions. | efficient   | but implied | processing. |
+|             |             | if          | by          |             |
+|             |             | wel         | m           |             |
+|             |             | l-designed. | ulti-animal |             |
+|             |             |             | studies.    |             |
++-------------+-------------+-------------+-------------+-------------+
+| Statistical | Primarily   | Export to   | Student\'s  | Basic       |
+| Analysis    | qua         | statistical | t-tests     | comparisons |
+| Support     | ntification | packages or | mentioned.  | (t-tests,   |
+|             | and export. | use         |             | ANOVA) for  |
+|             | No advanced | MATLAB\'s   |             | summary     |
+|             | integrated  | toolboxes.  |             | metrics.    |
+|             | statistics. | Full        |             | FLMMs       |
+|             |             | flexibility |             | recommended |
+|             |             | for         |             | for         |
+|             |             | advanced    |             | analyzing   |
+|             |             | models      |             | full        |
+|             |             | (e.g.,      |             | temporal    |
+|             |             | FLMM).      |             | dynamics of |
+|             |             |             |             | ev          |
+|             |             |             |             | ent-related |
+|             |             |             |             | s           |
+|             |             |             |             | ignals.^15^ |
++-------------+-------------+-------------+-------------+-------------+
+| User-F      | GUI-based,  | Requires    | N/A         | GUI tools   |
+| riendliness | relatively  | MATLAB      | (Analysis   | lower entry |
+| &           | accessible  | programming | performed   | barrier.    |
+| Ac          | for         | expertise.  | by          | Scripting   |
+| cessibility | non-p       | Steeper     | researchers | offers      |
+|             | rogrammers. | learning    | with        | power to    |
+|             |             | curve.      | necessary   | experts.    |
+|             |             |             | skills).    |             |
++-------------+-------------+-------------+-------------+-------------+
+| Flexibility | Moderate:   | Very High:  | High        | High        |
+| &           | Open source | Virtually   | (within the | flexibility |
+| Cust        | allows      | unlimited   | chosen      | is          |
+| omizability | mo          | cu          | methods).   | desirable   |
+|             | dification, | stomization |             | to adapt to |
+|             | but core    | of every    |             | new methods |
+|             | algorithms  | analysis    |             | and         |
+|             | are fixed   | step.       |             | specific    |
+|             | without     |             |             | data        |
+|             | coding.     |             |             | chara       |
+|             | Some        |             |             | cteristics. |
+|             | parameter   |             |             |             |
+|             | adjustments |             |             |             |
+|             | via GUI.    |             |             |             |
++-------------+-------------+-------------+-------------+-------------+
+ 
+**4. Recommendations for Optimizing Your Analysis Pipeline**\
+Based on the comparison of tools and current best practices, the
+following recommendations are provided to optimize the analysis pipeline
+for investigating ACh signals during feeding and other behaviors.\
+**4.1. Leveraging fpExplorer\'s Strengths**\
+fpExplorer offers several features that can streamline the initial
+stages of data handling and analysis ^4^:
+ 
+-   Data Import and Organization: Utilize fpExplorer for the initial
+    import of TDT raw data files or your pre-formatted CSV signal files.
+    Its ability to handle the TDT folder structure is a significant
+    convenience.
+ 
+-   Behavioral Event Synchronization: The capability to import event
+    timestamps from CSV files is crucial for aligning your manually
+    scribed behavioral annotations (feeding, grooming, social
+    interaction) with the photometry data.
+ 
+-   Video Integration: The fpVideoCreator module is a valuable asset.
+    Generating video clips synchronized with peri-event photometry data
+    will be extremely useful for verifying behavioral scoring,
+    presentations, and potentially as supplementary material for
+    publications.
+ 
+-   Initial Visualization and Exploration: Use fpExplorer\'s plotting
+    capabilities to preview raw signals, the effects of initial
+    preprocessing steps (like downsampling or basic filtering), and to
+    generate initial peri-event averages. This can help in identifying
+    obvious issues or interesting patterns early on.
+ 
+-   Basic Quantification and Batch Processing: If its normalization
+    methods are deemed sufficiently robust after further investigation
+    (see 4.2), fpExplorer\'s batch processing for calculating Z-scores
+    or dF/F, and its tools for AUC or spike detection, can be efficient
+    for processing multiple datasets consistently.\
+    **4.2. Addressing Potential Gaps with MATLAB or fpExplorer
+    Enhancements**\
+    While fpExplorer provides a solid foundation, certain critical
+    processing steps may benefit from the greater algorithmic control
+    offered by MATLAB, or by enhancing fpExplorer itself.
+ 
+```{=html}
+<!-- -->
+```
+-   Motion Artifact Correction -- The Primary Concern:
+ 
+    -   The \"Standard Polynomial Fitting\" and \"Modified Polynomial
+        Fitting\" in fpExplorer are central to its motion correction.^4^
+        It is essential to understand their precise mathematical
+        implementation. If these methods are based on Ordinary Least
+        Squares (OLS) regression, they may be susceptible to
+        inaccuracies if significant neural activity (ACh transients)
+        correlates with movement during feeding. As discussed (Insight
+        1.1.1.A), OLS can misattribute parts of the neural signal as
+        artifact, leading to signal attenuation.^2^
+ 
+    -   Recommendation:
+ 
+        1.  Investigate fpExplorer\'s Fitting: Examine the Python code
+            in fpExplorer_functions.py to determine the exact nature of
+            the polynomial fitting, particularly the \"Modified\"
+            version. If it already incorporates robust regression
+            principles (e.g., down-weighting outliers during the fit),
+            it may be adequate.
+ 
+        2.  Consider IRLS Implementation: If fpExplorer\'s methods are
+            OLS-based, and if visual inspection suggests that
+            feeding-related ACh signals are being suppressed or
+            distorted by the motion correction, implementing an
+            Iteratively Reweighted Least Squares (IRLS) regression of
+            the 405nm control signal onto the 465nm signal channel is
+            highly recommended. This could be done:
+ 
+            -   In MATLAB: Export the raw 405nm and 465nm data, perform
+                IRLS correction in MATLAB, and then import the corrected
+                465nm trace (or a dF/F derived from it) back into
+                fpExplorer as a CSV for further event-related analysis.
+ 
+            -   As an fpExplorer Enhancement: If feasible and Python
+                expertise is available, adding an IRLS fitting option to
+                fpExplorer_functions.py would be a significant
+                improvement to the tool, making it more robust for a
+                wider range of experimental conditions.
+ 
+```{=html}
+<!-- -->
+```
+-   F0 Estimation for dF/F Calculation:
+ 
+    -   The accuracy of dF/F normalization depends critically on the F0
+        estimation. If using fpExplorer\'s polynomial fitting, this
+        fitted curve (after control channel regression) effectively
+        becomes F0.
+ 
+    -   Recommendation: Ensure that the F0 used for dF/F calculation is
+        derived from the *motion-corrected* 465nm signal. A robust
+        method, as suggested by Lerner et al. and consistent with the
+        principles in ^2^ and ^6^, is to use the fitted (scaled) control
+        channel signal as F0, such that dF/F = (Signal_Raw -
+        Fitted_Control) / Fitted_Control. Verify if fpExplorer\'s dF/F
+        calculation aligns with this or a similarly robust principle. If
+        F0 is derived, for example, from the raw 465nm signal before
+        adequate motion correction, or via a simple moving average that
+        doesn\'t account for artifacts, the dF/F values could be
+        inaccurate.
+ 
+```{=html}
+<!-- -->
+```
+-   Advanced Statistical Analysis:
+ 
+    -   fpExplorer provides tools for quantification but not for
+        advanced statistical modeling of time-series data (e.g., FLMMs).
+ 
+    -   Recommendation: For rigorous hypothesis testing, especially when
+        comparing temporal dynamics of ACh signals across different
+        feeding sub-events or conditions, plan to export the relevant
+        data from fpExplorer. This would typically be trial-by-trial
+        peri-event traces (either Z-scored or dF/F) or quantified
+        metrics (peak, AUC, etc.). These data can then be analyzed using
+        specialized statistical packages in R (e.g., for FLMMs using
+        packages like refund or lme4/gamm4), Python (e.g., statsmodels,
+        pymer4), or MATLAB\'s Statistics and Machine Learning Toolbox.
+        This approach aligns with best practices for robust inference
+        from fiber photometry data.^15^\
+        **4.3. Hybrid Approach Workflow Suggestion**\
+        A hybrid workflow, combining the strengths of fpExplorer for
+        data management and user-friendly initial analyses with the
+        algorithmic power of MATLAB (or Python scripting) for critical
+        processing steps, is likely to provide the best balance of
+        efficiency and scientific rigor.
+ 
+1.  Data Import & Initial Synchronization (fpExplorer):
+ 
+    -   Import raw TDT data into fpExplorer.
+ 
+    -   Import your manually scribed behavioral event timestamps
+        (formatted as a CSV compatible with fpExplorer).
+ 
+    -   Use fpVideoCreator to generate synchronized video snippets for
+        key behavioral epochs. This helps in verifying event timing and
+        for presentations.
+ 
+```{=html}
+<!-- -->
+```
+1.  Core Signal Preprocessing (Iterative; fpExplorer and/or MATLAB):
+ 
+    -   Initial Filtering (fpExplorer or MATLAB): Apply a gentle
+        low-pass filter (e.g., 15-20 Hz cutoff) to the raw 465nm and
+        405nm signals.
+ 
+    -   Motion Artifact Correction & F0 Estimation:
+ 
+        -   Option A (fpExplorer-centric, with scrutiny):
+ 
+            -   Utilize fpExplorer\'s \"Modified Polynomial Fitting.\"
+ 
+            -   Carefully examine the output: Does the fitted baseline
+                (F0) look appropriate? Does the corrected signal appear
+                free of obvious motion artifacts without suppressing
+                expected neural transients? Compare with raw data
+                segments where known movements occurred.
+ 
+            -   If results are satisfactory and visually validated,
+                proceed with dF/F or Z-score normalization within
+                fpExplorer.
+ 
+        ```{=html}
+        <!-- -->
+        ```
+        -   Option B (MATLAB for maximal robustness, then fpExplorer):
+ 
+            -   Export the filtered raw 465nm and 405nm traces from
+                fpExplorer (or load directly into MATLAB from TDT
+                files).
+ 
+            -   In MATLAB, implement an IRLS regression to fit the 405nm
+                control signal to the 465nm signal channel.
+ 
+            -   Calculate dF/F using a robust F0, for example, by using
+                the IRLS-fitted control trace as F0: dF/F =
+                (Signal\<sub\>465nm\</sub\> -
+                Fitted_Control\<sub\>405nm\</sub\>) /
+                Fitted_Control\<sub\>405nm\</sub\>.
+ 
+            -   Save this robustly motion-corrected and normalized dF/F
+                trace.
+ 
+            -   Import this processed dF/F trace back into fpExplorer as
+                a CSV file.
+ 
+```{=html}
+<!-- -->
+```
+1.  Event Alignment & Peri-Event Visualization (fpExplorer):
+ 
+    -   Using the (potentially re-imported) robustly processed trace,
+        align signals to your defined feeding, grooming, and social
+        interaction events within fpExplorer.
+ 
+    -   Generate peri-event averages and, if possible within fpExplorer
+        or easily scripted externally, heatmaps to visualize the ACh
+        dynamics.
+ 
+```{=html}
+<!-- -->
+```
+1.  Quantification (fpExplorer and/or MATLAB/Python):
+ 
+    -   Utilize fpExplorer\'s tools for quantifying AUC, peak
+        characteristics, or \"spikes\" if its algorithms are deemed
+        appropriate for the observed signal morphology.
+ 
+    -   For more customized or complex quantification (e.g., specific
+        kinetic parameters, frequency analysis beyond simple spike
+        counting), export the relevant data segments for analysis in
+        MATLAB or Python.
+ 
+```{=html}
+<!-- -->
+```
+1.  Statistical Analysis (R, Python, or MATLAB):
+ 
+    -   Export the quantified metrics (e.g., peak Z-scores, AUC values
+        per trial) or, ideally, the trial-by-trial peri-event
+        time-series data from fpExplorer.
+ 
+    -   Perform statistical comparisons using appropriate methods
+        (t-tests, ANOVAs for summary metrics; FLMMs or cluster-based
+        permutation tests for time-series data) in a dedicated
+        statistical software environment.\
+        This hybrid approach leverages fpExplorer\'s user-friendliness
+        for data handling, event management, and initial visualization,
+        while reserving the power of MATLAB or Python scripting for the
+        most critical signal processing steps (like robust motion
+        correction) and advanced statistical analyses. This ensures that
+        the final results are both efficiently generated and
+        scientifically rigorous.\
+        **5. Data Visualization and Reporting for Publication**\
+        Clear, informative, and transparent visualization and reporting
+        of fiber photometry data are crucial for communicating findings
+        effectively and ensuring reproducibility.\
+        **5.1. Key Visualization Types**\
+        To comprehensively present your findings on ACh dynamics during
+        feeding and other behaviors, consider incorporating the
+        following types of plots:
+ 
+-   Peri-event Rasters and Heatmaps: These are essential for displaying
+    trial-by-trial activity aligned to specific behavioral events (e.g.,
+    \"First Bite,\" onset of grooming).
+ 
+    -   Heatmaps: Typically plot time relative to the event on the
+        x-axis, trial number on the y-axis, and the normalized signal
+        amplitude (dF/F or Z-score) as a color intensity. They are
+        excellent for visualizing the consistency of responses across
+        trials, identifying trial-to-trial variability, observing
+        potential learning effects, or detecting sub-populations of
+        responses.^7^
+ 
+    -   Rasters (for discrete events/spikes): If ACh signals manifest as
+        discrete \"spikes,\" a raster plot showing the timing of these
+        spikes across multiple trials aligned to a behavioral event can
+        be informative.
+ 
+```{=html}
+<!-- -->
+```
+-   Average Peri-Event Traces: These plots show the mean normalized dF/F
+    or Z-score across all trials for a given event, aligned to the event
+    onset (time = 0).
+ 
+    -   The y-axis should represent the normalized signal, and the
+        x-axis time relative to the event.
+ 
+    -   Shading around the mean trace (representing SEM or a 95%
+        confidence interval) is standard and indicates the variability
+        of the response.^7^
+ 
+    -   Clearly label axes, the time of event onset, and any specific
+        baseline period used for Z-scoring or visual reference.
+ 
+```{=html}
+<!-- -->
+```
+-   Example Raw and Processed Traces: To demonstrate the efficacy of
+    your preprocessing pipeline, it is good practice to show
+    representative segments of:
+ 
+    -   The raw 465nm (signal) and 405nm (control) traces.
+ 
+    -   The fitted control signal overlaid on the raw signal channel.
+ 
+    -   The final motion-corrected and normalized (dF/F or Z-score)
+        trace. This provides visual evidence of artifact removal and
+        baseline correction.^2^
+ 
+```{=html}
+<!-- -->
+```
+-   Quantification Plots: For presenting statistical comparisons of
+    quantified metrics:
+ 
+    -   Bar graphs, box plots, or violin plots: Use these to compare
+        metrics like peak amplitude, AUC, latency, or event frequency
+        across different conditions (e.g., feeding vs. baseline,
+        different food types, different behavioral states) or animal
+        groups.
+ 
+    -   Individual Data Points: Whenever possible, overlay individual
+        data points on summary plots (like bar or box plots) to show the
+        data distribution and avoid concealing variability.
+ 
+```{=html}
+<!-- -->
+```
+-   Correlation Plots: If exploring relationships between specific
+    features of the ACh signal (e.g., peak Z-score during feeding) and
+    quantitative behavioral parameters (e.g., duration of the feeding
+    bout, amount of food consumed, latency to initiate feeding), scatter
+    plots with regression lines and correlation statistics can be very
+    informative.
+ 
+-   Statistical Significance Indicators: Clearly indicate statistical
+    significance on plots (e.g., using asterisks or lines connecting
+    groups/conditions with p-values reported in the legend or text).\
+    **5.2. Reporting Standards for Publication**\
+    Adherence to high reporting standards is critical for the
+    credibility and reproducibility of fiber photometry research.^16^
+    Your manuscript\'s methods section should meticulously detail all
+    aspects of the data acquisition and analysis pipeline.
+ 
+```{=html}
+<!-- -->
+```
+-   Experimental Procedures:
+ 
+    -   Animals: Species, strain, sex, age, housing conditions.
+ 
+    -   Sensor and Viral Delivery: Specific ACh sensor used (e.g.,
+        GACh3.0), virus titer, injection coordinates, volume, and
+        post-surgery recovery time.
+ 
+    -   Fiber Optic Implantation: Fiber type (core diameter, NA),
+        implantation coordinates and depth.
+ 
+    -   Photometry System: Manufacturer and model of the photometry
+        system, light sources (wavelengths, power at fiber tip),
+        detectors, filters, and data acquisition parameters (sampling
+        rate, lock-in amplification details if used).
+ 
+    -   Behavioral Paradigm: Detailed description of the feeding
+        protocol (e.g., food type, deprivation schedule if any,
+        habituation procedures), grooming induction, or social
+        interaction setup. Explicit operational definitions for all
+        scored behaviors and how they were timestamped.
+ 
+```{=html}
+<!-- -->
+```
+-   Data Analysis Steps:
+ 
+    -   Software Used: Specify all software used for analysis, including
+        versions (e.g., fpExplorer version X.Y, MATLAB R20XXb with
+        specific toolboxes, Python version X.Y with specific libraries
+        like Pandas, SciPy, Matplotlib).
+ 
+    -   Preprocessing:
+ 
+        -   Motion Artifact Correction: Detail the method used (e.g.,
+            \"isosbestic 405nm signal was fit to the 465nm signal using
+            Iteratively Reweighted Least Squares regression with a
+            Tukey\'s bisquare weighting function\...\"). If using
+            fpExplorer\'s polynomial fitting, describe it as
+            \"Standard\" or \"Modified\" and, if possible, provide key
+            parameters or reference its implementation.
+ 
+        -   Photobleaching/Drift Correction: Explain how this was
+            addressed (e.g., \"as part of the control channel fitting
+            process,\" or \"by fitting a bi-exponential decay function
+            to\...\").
+ 
+        -   Filtering: Specify the type of filter (e.g., \"Butterworth
+            low-pass filter,\" \"moving average filter\") and its
+            parameters (e.g., \"4th order, 20 Hz cutoff,\" \"10-sample
+            window\").
+ 
+    ```{=html}
+    <!-- -->
+    ```
+    -   Normalization:
+ 
+        -   dF/F: Clearly state how F0 was estimated (e.g., \"F0 was
+            defined as the fitted value from the polynomial regression
+            of the motion-corrected signal,\" or \"F0 was the value of
+            the scaled and fitted 405nm control channel signal\").
+            Provide the formula used if it deviates from (F-F0)/F0.
+ 
+        -   Z-score: Precisely define the baseline period used for
+            calculating the mean and standard deviation (e.g., \"-10s to
+            -2s preceding food presentation\").
+ 
+        -   State explicitly why dF/F or Z-score was chosen for each
+            specific analysis presented.
+ 
+    ```{=html}
+    <!-- -->
+    ```
+    -   Event Alignment and Peri-Event Analysis: Describe the time
+        windows used for peri-event analysis.
+ 
+    -   Quantification: Define how each reported metric (peak, AUC,
+        latency, etc.) was calculated from the normalized traces. For
+        spike/transient detection, report the parameters used (e.g.,
+        prominence, distance).
+ 
+    -   Statistical Analysis: For each statistical test, report the
+        specific test used, the variables being compared, the N (number
+        of animals/trials), degrees of freedom, the value of the test
+        statistic (e.g., t, F, Z), the exact p-value (rather than p \<
+        0.05, unless very small e.g., p \< 0.0001), and effect sizes
+        where appropriate. If using FLMMs, describe the model structure
+        (fixed and random effects) and how significance was determined.
+ 
+    -   Data Exclusion Criteria: Clearly state any criteria used for
+        excluding animals, trials, or data segments from the analysis.
+ 
+```{=html}
+<!-- -->
+```
+-   Data Availability: Consider making raw data, processed data (e.g.,
+    normalized peri-event traces), and analysis scripts available, for
+    example, as supplementary materials or in a public repository. This
+    greatly enhances transparency and reproducibility, a practice
+    strongly encouraged in the field.^16^\
+    Transparency in reporting all analysis parameters and choices is as
+    crucial as the analysis itself. The field of fiber photometry has
+    seen rapid growth, and with it, a diversity of analysis
+    approaches.^1^ Small, seemingly minor variations in analysis
+    parameters (e.g., filter settings, baseline window definitions, F0
+    estimation methods) can sometimes lead to different quantitative
+    results or interpretations. Therefore, providing meticulous detail
+    in the methods section allows reviewers and readers to fully
+    understand the analysis, assess its validity, and potentially
+    replicate the findings. This adherence to rigorous reporting
+    standards is essential for meeting the expectations of high-quality
+    journals.\
+    **6. Guidance on Experimental Design for Acetylcholine and Feeding
+    Studies**\
+    A robust experimental design is the foundation upon which reliable
+    and interpretable fiber photometry results are built. This section
+    provides guidance on designing experiments to investigate ACh
+    dynamics during feeding, drawing from the cited Jing et al. (2020)
+    paper and general best practices in behavioral neuroscience and
+    fiber photometry.\
+    **6.1. Drawing from Jing et al. (2020) and General Best Practices**
+ 
+```{=html}
+<!-- -->
+```
+-   Sensor Selection and Control Considerations:
+ 
+    -   Sensor: The use of an optimized ACh sensor, such as the GACh3.0
+        described by Jing et al. ^5^, is appropriate for detecting ACh
+        dynamics with good sensitivity and temporal resolution.
+ 
+    -   Control Experiments: While challenging for naturalistic
+        behaviors, consider potential control experiments to strengthen
+        interpretations. Jing et al. (2020) utilized several controls in
+        their broader study, including a ligand-insensitive version of
+        the sensor (ACh3.0-mut) and vesicular ACh transporter knockout
+        mice (VAChT\<sup\>-/-\</sup\>) to confirm the cholinergic nature
+        and synaptic origin of signals.^5^ For behavioral studies, this
+        might involve:
+ 
+        -   Expressing a non-ACh-sensitive fluorescent protein (e.g.,
+            eYFP) in the same brain region and with the same fiber
+            placement in a separate cohort of animals to control for
+            non-specific fluorescence changes related to behavior or
+            movement that might not be fully captured by the isosbestic
+            channel.
+ 
+        -   Pharmacological manipulations (e.g., local administration of
+            ACh receptor antagonists) could be used to confirm that
+            observed signals are indeed ACh-dependent, though this can
+            be complex to implement and interpret in freely moving
+            animals during complex behaviors.
+ 
+```{=html}
+<!-- -->
+```
+-   Behavioral Paradigms and Annotation:
+ 
+    -   Clear Definition and Granularity of Feeding Epochs: As
+        emphasized in Section 2.1, precisely defining and timestamping
+        different phases of feeding behavior is critical. Instead of a
+        single \"feeding\" event, consider annotating sub-components
+        such as:
+ 
+        -   Food presentation/availability.
+ 
+        -   Latency to approach food.
+ 
+        -   First contact/sniff of food.
+ 
+        -   First bite/lick.
+ 
+        -   Duration of individual chewing/licking bouts.
+ 
+        -   Inter-bout intervals.
+ 
+        -   Total consumption time / amount consumed (if measurable).
+ 
+        -   Cessation of feeding. This detailed annotation allows for a
+            more nuanced analysis of how ACh signals evolve across the
+            entire feeding sequence.
+ 
+    ```{=html}
+    <!-- -->
+    ```
+    -   Control Behaviors: To assess the specificity of feeding-related
+        ACh signals, it is essential to record and analyze ACh dynamics
+        during other distinct, quantifiable behaviors. The planned
+        analysis of grooming and social interaction is good. Also
+        include periods of:
+ 
+        -   Quiet wakefulness (animal awake but not actively engaged in
+            a specific task).
+ 
+        -   Locomotion (e.g., exploration in the cage, distinct from
+            goal-directed approach to food). Comparing ACh signals
+            during feeding to these other behaviors will help determine
+            if observed changes are specific to feeding or represent
+            more general arousal or motor activity.
+ 
+    ```{=html}
+    <!-- -->
+    ```
+    -   Habituation: Ensure animals are thoroughly habituated to the
+        experimental environment, the fiber optic tether, and any
+        experimental procedures (e.g., food presentation method) before
+        data collection begins. This minimizes stress-induced ACh
+        fluctuations that could confound the interpretation of
+        feeding-related signals. Stress itself can significantly
+        modulate feeding behavior and LC-NE activity, which might
+        interact with cholinergic systems.^10^
+ 
+    -   Consistency of Food Presentation and Type: If comparing
+        responses to different food types (e.g., standard chow vs.
+        palatable high-fat/sugar food), ensure that the presentation
+        method, novelty, and other contextual factors are as consistent
+        as possible, apart from the food itself.
+ 
+```{=html}
+<!-- -->
+```
+-   Number of Subjects and Trials:
+ 
+    -   Statistical Power: Adequate statistical power is crucial for
+        detecting true effects. While Jing et al. (2020) provide
+        examples of sample sizes for *in vitro* or simpler *in vivo*
+        preparations (e.g., n=5-7 for some cell culture/slice
+        experiments ^5^), behavioral studies in rodents typically
+        require larger group sizes to account for inter-animal
+        variability. A common range is 8-12+ animals per experimental
+        group, but this should ideally be determined by a power analysis
+        based on expected effect sizes and variability.
+ 
+    -   Multiple Trials: Collecting data from multiple feeding trials
+        (or bouts) per animal is necessary. This allows for assessment
+        of the consistency of ACh responses within individual animals
+        and provides data for averaging, which can improve the
+        signal-to-noise ratio.
+ 
+```{=html}
+<!-- -->
+```
+-   Video Recording and Behavioral Scoring:
+ 
+    -   High-Quality, Synchronized Video: Continue to use high-quality
+        video recording that is tightly synchronized with the fiber
+        photometry data acquisition. This is fundamental for accurate
+        post-hoc behavioral annotation.
+ 
+    -   Standardized Scoring: Develop a clear, unambiguous ethogram for
+        all behaviors of interest (feeding components, grooming, social
+        interactions, etc.). If multiple individuals are involved in
+        behavioral scoring, ensure they are trained to use the ethogram
+        consistently and assess inter-rater reliability.
+ 
+    -   Automated Behavioral Analysis: If available and validated for
+        your specific behaviors and experimental setup, consider using
+        automated behavioral analysis software (e.g., DeepLabCut for
+        pose estimation, followed by custom scripts for behavior
+        classification). This can complement manual scoring, increase
+        throughput, and potentially improve objectivity, though it
+        requires careful validation.
+ 
+    -   Blinded Scoring: Whenever feasible, behavioral scoring should be
+        performed by an observer who is blind to the experimental
+        conditions or the corresponding photometry data to minimize
+        potential bias.\
+        The temporal precision of behavioral annotation is paramount for
+        accurately correlating ACh signals with specific phases of
+        complex behaviors like feeding. ACh signals can be rapid and
+        transient ^5^, and feeding itself is a dynamic process.
+        Imprecise timestamps or overly broad behavioral categories can
+        smear out or misattribute neural correlates. Therefore,
+        investing significant effort in developing a detailed ethogram,
+        ensuring consistent application by scorers, and achieving high
+        temporal resolution in annotations will be critical for the
+        success of the study. The fpVideoCreator tool associated with
+        fpExplorer ^4^ can be a valuable aid in linking these precise
+        behavioral annotations with the corresponding photometry data
+        segments.\
+        **7. Concluding Remarks and Key Recommendations**\
+        This report has provided a comprehensive analysis of
+        methodologies for investigating acetylcholine (ACh) signals
+        using fiber photometry, with a specific focus on feeding
+        behavior in mice. The evaluation covered foundational
+        preprocessing steps, event-related analysis strategies, a
+        comparison of the fpExplorer tool with custom MATLAB scripting,
+        and guidance on experimental design and data reporting.\
+        Key Recommendations for an Optimized Analysis Pipeline:
+ 
+1.  Prioritize Robust Motion Artifact Correction: This is the most
+    critical preprocessing step.
+ 
+    -   Action: Thoroughly investigate the specific algorithm of
+        fpExplorer\'s \"Modified Polynomial Fitting.\" If it is not
+        demonstrably robust against movement-correlated neural signals
+        (e.g., if it\'s OLS-based without specific outlier handling),
+        implement or utilize an Iteratively Reweighted Least Squares
+        (IRLS) regression to fit the 405nm control signal to the 465nm
+        signal channel. This can be done in MATLAB, with the corrected
+        trace imported back into fpExplorer. This aligns with advanced
+        best practices for minimizing signal distortion.^2^
+ 
+```{=html}
+<!-- -->
+```
+1.  Adopt a Context-Appropriate Normalization Strategy:
+ 
+    -   For Event-Related Feeding Analysis: Z-scoring the
+        motion-corrected signal relative to a consistently defined
+        pre-event baseline is a standard and appropriate approach for
+        comparing phasic responses.
+ 
+    -   For Exploratory/Tonic Analysis or if Baseline Variance is a
+        Concern: dF/F is preferable. Ensure F0 is robustly estimated
+        from the motion-corrected trace, ideally using the fitted
+        control channel as F0 (dF/F = (Signal - Fitted_Control) /
+        Fitted_Control).
+ 
+    -   Action: Configure fpExplorer or your MATLAB scripts accordingly.
+        Clearly justify and document the chosen normalization method and
+        its parameters for each analysis presented.
+ 
+```{=html}
+<!-- -->
+```
+1.  Implement Granular Behavioral Event Definition:
+ 
+    -   Action: Sub-divide complex behaviors like feeding into distinct,
+        precisely timestamped components (e.g., food approach, first
+        bite, consumption bout). Analyze ACh signals aligned to these
+        sub-events to capture the full temporal dynamics of cholinergic
+        involvement.
+ 
+```{=html}
+<!-- -->
+```
+1.  Employ a Hybrid Analysis Workflow:
+ 
+    -   Action:
+ 
+        -   Use fpExplorer for its strengths in TDT/CSV data import,
+            initial visualization, event management (especially with
+            fpVideoCreator for video synchronization), and potentially
+            for batch processing of basic normalizations if its methods
+            are validated as suitable for the data.
+ 
+        -   Use MATLAB (or Python scripting) for implementing the most
+            robust motion correction algorithms (e.g., IRLS if not
+            adequately handled by fpExplorer) and for advanced
+            statistical analyses (e.g., Functional Linear Mixed Models -
+            FLMMs).
+ 
+```{=html}
+<!-- -->
+```
+1.  Elevate Statistical Analysis:
+ 
+    -   Action: For comparing event-related ACh dynamics, move beyond
+        simple comparisons of summary statistics. Export trial-by-trial
+        peri-event data and utilize FLMMs or other appropriate
+        time-series statistical methods in R or Python to analyze the
+        entire temporal profile of the signal, accounting for within-
+        and between-subject variability.^15^
+ 
+```{=html}
+<!-- -->
+```
+1.  Ensure Transparent and Detailed Reporting:
+ 
+    -   Action: Meticulously document every step of the analysis
+        pipeline in publications, including sensor details, animal
+        procedures, all preprocessing parameters (fitting algorithms,
+        filter settings), normalization methods (F0 definition or
+        Z-score baseline), event definitions, quantification metrics,
+        and full statistical reporting. This is crucial for
+        reproducibility and credibility.^16^\
+        Tool Comparison Summary:
+ 
+-   fpExplorer: Provides a user-friendly, integrated platform that is
+    particularly strong for TDT data handling, basic processing, event
+    management, and video synchronization. Its open-source nature allows
+    for potential custom enhancements. Its \"correctness\" for advanced
+    artifact correction hinges on the specifics of its internal fitting
+    algorithms, which require careful user evaluation.
+ 
+-   MATLAB Scripts: Offer maximum flexibility and power to implement any
+    state-of-the-art or custom analysis algorithm, allowing for
+    potentially higher \"correctness\" if implemented properly. However,
+    this requires significant programming expertise and development
+    time.\
+    Future Directions for fpExplorer:\
+    If development resources are available, enhancing fpExplorer to
+    include an explicit IRLS fitting option for motion correction and
+    providing more detailed documentation or user control over the F0
+    estimation in its polynomial fitting routines would significantly
+    increase its robustness and appeal as a standalone \"industry
+    standard\" tool.\
+    By adopting a rigorous, transparent, and context-appropriate
+    analysis pipeline, incorporating advanced techniques where
+    necessary, the research on ACh signals during feeding behavior will
+    be well-positioned for generating high-impact and reproducible
+    findings.

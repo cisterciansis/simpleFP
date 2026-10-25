@@ -1,0 +1,57 @@
+# Roadmap
+
+North star: one native app where a lab goes from cage to figure: animals and cohorts, sessions, synchronized video
+and photometry, behavior scoring (manual and AI), rigorous statistics, and publication figures. Everything stays
+reproducible from a preset and a manifest.
+
+## v0.1 (this release): single-session photometry
+- [x] Native TDT reader (streams, epocs, SEV), block clock throughout
+- [x] Cited pipeline: low-pass → decimate → bleaching → IRLS → ΔF/F; `fit_raw`, `ols`, `none` alternatives
+- [x] Peri-event epochs, bootstrap CI + consecutive threshold, metrics, control-channel response QC
+- [x] Presets with inheritance and strict validation; CLI; provenance manifest; FLMM export
+- [x] SwiftUI app: library, LOD trace with pan/zoom, overview, PETH + control overlay, heatmap, metrics, QC inspector, preset editor
+- [x] Ground-truth simulator and validation suite
+
+## v0.2: cohorts and correct group inference
+- Cohort model: animal, session, condition and group metadata (sidecar `session.toml` next to each block)
+- Two-stage inference with the animal as the unit:
+  - per-animal mean waveforms, then group bootstrap CI;
+  - between-group CI and permutation tests;
+  - hierarchical bootstrap for metrics;
+  - Benjamini–Hochberg correction across events and metrics
+- Invalid-sample masking (dropouts, flat runs, ADC saturation with a hardware `adc_max`) that drops overlapping epochs
+- Spontaneous transient detection (GuPPy two-threshold MAD; prominence method)
+- Event overlap policy (`exclude_if_preceded_s`) and bout detection for feeding
+- Multi-site blocks (465A/405A plus 465C/405C) side by side
+- Figure export (PDF/SVG at journal sizes) from the same Canvas renderers; methods paragraph generated from `run.json`
+- Parquet export; NWB writer validated against `pynwb`
+
+## v0.3: programmable
+- Luau scripting via `mlua` (sandboxed): scripts receive engine results and call Rust kernels (filters, fits,
+  bootstrap), returning new traces, metrics or figures. Pin `luau0-src` to 0.22.0; 0.22.1 crashes `mlua`.
+- Preset and script library with search (by sensor, region, rig); shareable as a single `.toml` + `.luau` bundle
+- Agent interface: a documented JSON-over-stdio mode in the CLI so an agent can inspect blocks, propose a preset,
+  run it and read QC without the GUI
+
+## v0.4: behavior video
+- Video + photometry sync via TDT camera epocs (`Cam1` frame TTLs) or Synapse video timestamps
+- Annotation suite: keyboard-driven event and bout scoring on a video timeline aligned to ΔF/F; ethogram view
+- Pose and tracking: run models on-device (Core ML / MLX) such as keypoints, centroid and region-of-interest occupancy;
+  import from DeepLabCut, SLEAP and Bonsai
+- AI-assisted scoring: vision models propose events, the user confirms; inter-rater agreement reported
+- Continuous-behavior regression (speed, distance-to-food) against ΔF/F
+
+## v0.5: lab management
+- Animal and cage tracking (cage cards, genotypes, surgeries, virus, fiber placement, histology verification)
+- Experiment journal linked to sessions, with cohort selection feeding straight into analysis
+- Optional sync (CloudKit for Apple-only labs; a self-hosted server later)
+
+## Cross-platform
+- GPUI shell for Linux/Windows on the same `engine` crate once GPUI has stable releases and accessibility
+- Hardware beyond TDT: Neurophotometrics (CSV), pyPhotometry, Doric, RWD, through new readers that return the same
+  `Stream`/`Epoc` types
+
+## Science backlog (methods-spec §12)
+- Settle the 405 nm behavior of GRAB-ACh3.0 on lab data (control-channel PETHs, mutant cohort)
+- Compare `irls` and `fit_raw` on mutant-sensor sessions
+- Native FLMM, deferred until there is a validated reference implementation to test against

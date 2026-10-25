@@ -1,0 +1,55 @@
+# GRAB-ACh3.0 (GACh3.0) recorded on a TDT RZ-series lock-in (Synapse "Fiber Photometry" gizmo).
+# Every value is justified in docs/science/methods-spec.md (§ numbers below).
+schema = 1
+id = "grab-ach3.0-tdt"
+name = "GRAB-ACh3.0 · TDT"
+description = "Acetylcholine GPCR sensor; 465 nm signal, 405 nm motion reference (not isosbestic for GRAB); per-channel double-exponential bleaching, robust control regression."
+references = [
+  "Jing M. et al. (2020) Nat Methods 17:1139–1146. doi:10.1038/s41592-020-0953-2",
+  "Simpson E.H. et al. (2024) Neuron 112:718–739. doi:10.1016/j.neuron.2023.11.016",
+  "Keevers L.J. & Jean-Richard-dit-Bressel P. (2025) Neurophotonics 12:025003. doi:10.1117/1.NPh.12.2.025003",
+  "Jean-Richard-dit-Bressel P., Clifford C.W.G. & McNally G.P. (2020) Front Mol Neurosci 13:14. doi:10.3389/fnmol.2020.00014",
+]
+
+[sensor]                     # §1.1
+name = "GRAB-ACh3.0"
+analyte = "acetylcholine"
+excitation_nm = 465
+control_nm = 405
+control_is_isosbestic = false  # isosbestic points are 384 and 434 nm (Simpson 2024, Table 2)
+tau_on_s = 0.1
+tau_off_s = 0.6
+
+[channels]                   # first match wins; pair by site letter
+signal = ["465A", "x465A", "_465A"]
+control = ["405A", "x405A", "_405A"]
+
+[preprocess]                 # §2–§3
+trim_start_s = 10.0
+trim_end_s = 0.0
+lowpass_hz = 4.0             # τ_on 0.1 s → ~1.6 Hz corner; 4 Hz keeps it, removes more noise than 6 Hz
+lowpass_order = 4
+target_fs = 20.0             # N = floor(1017.25/20) = 50 → 20.345 Hz
+
+[bleach]                     # §3.4
+method = "double_exp"
+robust = false
+
+[motion]                     # §4
+method = "irls"
+tuning = 1.4                 # Keevers & JRdB 2025: c = 1.4 most accurate
+
+[output]                     # §5.2: z is for display/detection only
+robust_z = true
+
+[events]                     # §6–§7
+pre_s = 10.0
+post_s = 20.0
+trace = "dff"
+baseline = "subtract"
+baseline_window = [-5.0, -1.0]
+metric_window = [0.0, 5.0]
+n_boot = 5000
+ci_level = 0.95
+min_consecutive_s = 0.25     # = 1 / lowpass_hz (JRdB 2020)
+seed = 1

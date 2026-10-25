@@ -1,0 +1,25 @@
+# GCaMP6/7/8 calcium indicators on a TDT RZ-series lock-in.
+# 405 nm is near- but below the true isosbestic point (420–430 nm; Simpson et al. 2024).
+schema = 1
+extends = "grab-ach3.0-tdt"
+id = "gcamp-tdt"
+name = "GCaMP · TDT"
+description = "Calcium indicators (GCaMP6/7/8); 465 nm signal, 405 nm near-isosbestic control."
+references = [
+  "Simpson E.H. et al. (2024) Neuron 112:718–739. doi:10.1016/j.neuron.2023.11.016",
+  "Zhang Y. et al. (2023) Nature 615:884–891. doi:10.1038/s41586-023-05828-9",
+]
+
+[sensor]
+name = "GCaMP"
+analyte = "calcium"
+tau_on_s = 0.05
+tau_off_s = 0.4
+
+[preprocess]
+lowpass_hz = 10.0
+target_fs = 50.0             # N = 20 → 50.86 Hz
+
+[events]
+metric_window = [0.0, 3.0]
+min_consecutive_s = 0.1      # = 1 / lowpass_hz

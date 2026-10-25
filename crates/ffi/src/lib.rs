@@ -1,0 +1,404 @@
+//! Swift-facing API. Heavy data stays in Rust; Swift asks for render-ready
+//! envelopes sized to the view, so a multi-hour recording draws in O(pixels).
+
+use simplefp::core::analysis::Analysis;
+use simplefp::core::events::Baseline;
+use simplefp::core::preset::{self, Preset};
+use simplefp::{EventSource, Recording};
+use std::collections::BTreeMap;
+use std::path::Path;
+use std::sync::Mutex;
+
+uniffi::setup_scaffolding!();
+
+#[derive(Debug, uniffi::Error)]
+pub enum FpError {
+    Failed { message: String },
+}
+
+impl std::error::Error for FpError {}
+
+impl std::fmt::Display for FpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let FpError::Failed { message } = self;
+        f.write_str(message)
+    }
+}
+
+impl From<String> for FpError {
+    fn from(message: String) -> Self {
+        FpError::Failed { message }
+    }
+}
+
+type R<T> = Result<T, FpError>;
+
+#[derive(uniffi::Record)]
+pub struct StreamInfo {
+    pub name: String,
+    pub fs: f64,
+    pub channels: u32,
+    pub samples: u64,
+}
+
+#[derive(uniffi::Record)]
+pub struct EpocInfo {
+    pub name: String,
+    pub count: u32,
+}
+
+#[derive(uniffi::Record)]
+pub struct BlockInfo {
+    pub path: String,
+    pub name: String,
+    pub start_unix: f64,
+    pub duration_s: f64,
+    pub signal: String,
+    pub control: Option<String>,
+    pub streams: Vec<StreamInfo>,
+    pub epocs: Vec<EpocInfo>,
+}
+
+#[derive(uniffi::Record)]
+pub struct PresetInfo {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub sensor: String,
+    pub toml: String,
+}
+
+#[derive(uniffi::Enum, Clone)]
+pub enum EventSpec {
+    Epoc { store: String },
+    EpocOffset { store: String },
+    Manual { label: String, times: Vec<f64> },
+}
+
+#[derive(uniffi::Record)]
+pub struct Qc {
+    pub fs: f64,
+    pub decimation: u32,
+    pub duration_s: f64,
+    pub analyzed_from_s: f64,
+    pub analyzed_to_s: f64,
+    pub bleach_signal_pct: f64,
+    pub bleach_control_pct: Option<f64>,
+    pub bleach_fallback: bool,
+    pub motion_r: Option<f64>,
+    pub motion_slope: Option<f64>,
+    pub motion_zero_weight_frac: Option<f64>,
+    pub saturation_frac: f64,
+    pub noise_dff_pct: f64,
+    pub residual_drift_pct_per_10min: f64,
+    pub warnings: Vec<String>,
+}
+
+#[derive(uniffi::Record)]
+pub struct TrialMetrics {
+    pub event_time: f64,
+    pub mean: f64,
+    pub auc: f64,
+    pub auc_pos: f64,
+    pub auc_neg: f64,
+    pub peak: f64,
+    pub peak_latency: f64,
+    pub trough: f64,
+    pub trough_latency: f64,
+}
+
+#[derive(uniffi::Record)]
+pub struct EventSummary {
+    pub label: String,
+    pub event_times: Vec<f64>,
+    pub dropped: Vec<f64>,
+    pub t: Vec<f64>,
+    /// Empty when fewer than two trials (no CI).
+    pub mean: Vec<f64>,
+    pub lo: Vec<f64>,
+    pub hi: Vec<f64>,
+    pub significant: Vec<bool>,
+    /// Control channel (% of its baseline), same epochs; empty without a control.
+    pub control_mean: Vec<f64>,
+    pub control_lo: Vec<f64>,
+    pub control_hi: Vec<f64>,
+    pub control_responds: bool,
+    pub metrics: Vec<TrialMetrics>,
+    /// Trials × samples, row-major little-endian f32.
+    pub heatmap: Vec<u8>,
+    pub unit: String,
+}
+
+#[derive(uniffi::Record)]
+pub struct Results {
+    pub qc: Qc,
+    pub events: Vec<EventSummary>,
+}
+
+#[derive(uniffi::Enum, Clone, Copy)]
+pub enum TraceKind {
+    Dff,
+    Z,
+    Signal,
+    SignalBaseline,
+    /// Bleaching baseline plus the scaled control: what the signal "should" be without ACh.
+    FittedControl,
+    Control,
+    ControlBaseline,
+}
+
+#[uniffi::export]
+pub fn presets() -> Vec<PresetInfo> {
+    preset::BUILTIN
+        .iter()
+        .map(|(id, src)| {
+            let p = preset::builtin(id).expect("valid builtin");
+            PresetInfo { id: id.to_string(), name: p.name, description: p.description, sensor: p.sensor.name, toml: src.to_string() }
+        })
+        .collect()
+}
+
+#[uniffi::export]
+pub fn engine_version() -> String {
+    simplefp::VERSION.to_string()
+}
+
+/// Write a synthetic block with known ground truth (for first-run demo).
+#[uniffi::export]
+pub fn write_demo(dir: String, seed: u64) -> R<u32> {
+    Ok(simplefp::write_demo_block(Path::new(&dir), seed)?.len() as u32)
+}
+
+/// Parse a manual events CSV (`event,time_s` header) into event specs.
+#[uniffi::export]
+pub fn read_events_csv(path: String) -> R<Vec<EventSpec>> {
+    Ok(simplefp::read_events_csv(Path::new(&path))?
+        .into_iter()
+        .filter_map(|e| match e {
+            EventSource::Manual { label, times } => Some(EventSpec::Manual { label, times }),
+            _ => None,
+        })
+        .collect())
+}
+
+#[uniffi::export]
+pub fn is_tdt_block(dir: String) -> bool {
+    simplefp::tdt::is_block(Path::new(&dir))
+}
+
+fn parse_preset(src: &str) -> R<Preset> {
+    Ok(preset::parse(src, &BTreeMap::new())?)
+}
+
+#[derive(uniffi::Object)]
+pub struct Session {
+    rec: Recording,
+    state: Mutex<(Preset, Option<Analysis>)>,
+}
+
+#[uniffi::export]
+impl Session {
+    /// Open a TDT block directory using a preset given as TOML source.
+    #[uniffi::constructor]
+    pub fn open(path: String, preset_toml: String) -> R<Self> {
+        let p = parse_preset(&preset_toml)?;
+        let rec = simplefp::load(Path::new(&path), &p)?;
+        Ok(Session { rec, state: Mutex::new((p, None)) })
+    }
+
+    pub fn info(&self) -> BlockInfo {
+        let b = &self.rec.block;
+        let s = &b.streams[&self.rec.signal];
+        BlockInfo {
+            path: b.path.display().to_string(),
+            name: b.path.file_name().map_or(String::new(), |n| n.to_string_lossy().into()),
+            start_unix: b.start_unix,
+            duration_s: b.duration.unwrap_or(s.channels[0].len() as f64 / s.fs),
+            signal: self.rec.signal.clone(),
+            control: self.rec.control.clone(),
+            streams: b.streams.values().map(|s| StreamInfo { name: s.name.clone(), fs: s.fs, channels: s.channels.len() as u32, samples: s.channels[0].len() as u64 }).collect(),
+            epocs: b.epocs.values().map(|e| EpocInfo { name: e.name.clone(), count: e.onset.len() as u32 }).collect(),
+        }
+    }
+
+    pub fn preset_toml(&self) -> String {
+        self.state.lock().unwrap().0.to_toml()
+    }
+
+    /// Run (or re-run with a new preset) and return everything the UI shows.
+    pub fn analyze(&self, preset_toml: Option<String>, events: Vec<EventSpec>) -> R<Results> {
+        let mut st = self.state.lock().unwrap();
+        if let Some(src) = preset_toml {
+            st.0 = parse_preset(&src)?;
+        }
+        let sources: Vec<EventSource> = events
+            .into_iter()
+            .map(|e| match e {
+                EventSpec::Epoc { store } => EventSource::Epoc(store),
+                EventSpec::EpocOffset { store } => EventSource::EpocOffset(store),
+                EventSpec::Manual { label, times } => EventSource::Manual { label, times },
+            })
+            .collect();
+        let a = self.rec.analyze(&st.0, &sources)?;
+        let results = results_of(&a, &st.0);
+        st.1 = Some(a);
+        Ok(results)
+    }
+
+    /// Min/max envelope of a trace over `[t0, t1]` in `buckets` columns, as
+    /// little-endian f32 triplets `(t, lo, hi)`. When zoomed past one sample per
+    /// bucket, each sample is returned once with `lo == hi`. NaN regions are skipped.
+    pub fn envelope(&self, kind: TraceKind, t0: f64, t1: f64, buckets: u32) -> Vec<u8> {
+        let st = self.state.lock().unwrap();
+        let Some(a) = &st.1 else { return vec![] };
+        let o = &a.output;
+        let owned: Vec<f64>;
+        let y: &[f64] = match kind {
+            TraceKind::Dff => &o.dff,
+            TraceKind::Z => &o.z,
+            TraceKind::Signal => &o.signal,
+            TraceKind::SignalBaseline => &o.signal_baseline,
+            TraceKind::FittedControl => match &o.motion_fit {
+                Some(m) => {
+                    owned = o.signal_baseline.iter().zip(m).map(|(b, m)| b + m).collect();
+                    &owned
+                }
+                None => return vec![],
+            },
+            TraceKind::Control => match &o.control {
+                Some(c) => c,
+                None => return vec![],
+            },
+            TraceKind::ControlBaseline => match &o.control_baseline {
+                Some(c) => c,
+                None => return vec![],
+            },
+        };
+        envelope(y, o.t0, o.fs, t0, t1, buckets.max(1) as usize)
+    }
+
+    /// Export CSVs + run.json for the current analysis.
+    pub fn export(&self, dir: String) -> R<u32> {
+        let st = self.state.lock().unwrap();
+        let a = st.1.as_ref().ok_or_else(|| FpError::from("run analyze() first".to_string()))?;
+        Ok(simplefp::export(&self.rec, &st.0, a, Path::new(&dir))?.len() as u32)
+    }
+}
+
+fn envelope(y: &[f64], t0: f64, fs: f64, a: f64, b: f64, buckets: usize) -> Vec<u8> {
+    let n = y.len();
+    if n == 0 || b <= a {
+        return vec![];
+    }
+    let i0 = (((a - t0) * fs).floor().max(0.0) as usize).min(n);
+    let i1 = (((b - t0) * fs).ceil().max(0.0) as usize + 1).min(n);
+    let mut out = Vec::with_capacity(buckets * 12);
+    let mut push = |t: f64, lo: f64, hi: f64| {
+        out.extend((t as f32).to_le_bytes());
+        out.extend((lo as f32).to_le_bytes());
+        out.extend((hi as f32).to_le_bytes());
+    };
+    let count = i1.saturating_sub(i0);
+    if count <= buckets {
+        for (i, &v) in y.iter().enumerate().take(i1).skip(i0) {
+            if v.is_finite() {
+                push(t0 + i as f64 / fs, v, v);
+            }
+        }
+    } else {
+        for k in 0..buckets {
+            let s = i0 + k * count / buckets;
+            let e = i0 + (k + 1) * count / buckets;
+            let (lo, hi) = y[s..e].iter().filter(|v| v.is_finite()).fold((f64::INFINITY, f64::NEG_INFINITY), |(l, h), &v| (l.min(v), h.max(v)));
+            if lo.is_finite() {
+                push(t0 + (s + e) as f64 / 2.0 / fs, lo, hi);
+            }
+        }
+    }
+    out
+}
+
+fn results_of(a: &Analysis, p: &Preset) -> Results {
+    let q = &a.output.qc;
+    let o = &a.output;
+    let unit = match p.events.baseline {
+        Baseline::Zscore | Baseline::RobustZscore => "z (baseline)",
+        _ => match p.events.trace {
+            preset::Trace::Dff => "ΔF/F (%)",
+            preset::Trace::Z => "z (session)",
+        },
+    };
+    Results {
+        qc: Qc {
+            fs: q.fs,
+            decimation: q.decimation as u32,
+            duration_s: q.duration_s,
+            analyzed_from_s: o.time(o.valid.start),
+            analyzed_to_s: o.time(o.valid.end - 1),
+            bleach_signal_pct: q.bleach_signal_pct,
+            bleach_control_pct: q.bleach_control_pct,
+            bleach_fallback: q.bleach_fallback,
+            motion_r: q.motion_r,
+            motion_slope: q.motion_slope,
+            motion_zero_weight_frac: q.motion_zero_weight_frac,
+            saturation_frac: q.saturation_frac,
+            noise_dff_pct: q.noise_dff_pct,
+            residual_drift_pct_per_10min: q.residual_drift_pct_per_10min,
+            warnings: q.warnings.clone(),
+        },
+        events: a
+            .events
+            .iter()
+            .map(|e| {
+                let ep = &e.epochs;
+                let (mean, lo, hi, significant) = match &e.ci {
+                    Some(c) => (c.mean.clone(), c.lo.clone(), c.hi.clone(), c.significant.clone()),
+                    None => (ep.trials.first().cloned().unwrap_or_default(), vec![], vec![], vec![]),
+                };
+                let (control_mean, control_lo, control_hi) = match &e.control_ci {
+                    Some(c) => (c.mean.clone(), c.lo.clone(), c.hi.clone()),
+                    None => (vec![], vec![], vec![]),
+                };
+                EventSummary {
+                    label: e.label.clone(),
+                    event_times: ep.event_times.clone(),
+                    dropped: ep.dropped.clone(),
+                    t: ep.t.clone(),
+                    mean,
+                    lo,
+                    hi,
+                    significant,
+                    control_mean,
+                    control_lo,
+                    control_hi,
+                    control_responds: e.control_responds,
+                    metrics: e
+                        .metrics
+                        .iter()
+                        .zip(&ep.event_times)
+                        .map(|(m, &t)| TrialMetrics { event_time: t, mean: m.mean, auc: m.auc, auc_pos: m.auc_pos, auc_neg: m.auc_neg, peak: m.peak, peak_latency: m.peak_latency, trough: m.trough, trough_latency: m.trough_latency })
+                        .collect(),
+                    heatmap: ep.trials.iter().flatten().flat_map(|&v| (v as f32).to_le_bytes()).collect(),
+                    unit: unit.to_string(),
+                }
+            })
+            .collect(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn envelope_bounds_and_lod() {
+        let y: Vec<f64> = (0..1000).map(|i| i as f64).collect();
+        let f = |b: &[u8]| b.as_chunks::<4>().0.iter().map(|c| f32::from_le_bytes(*c)).collect::<Vec<f32>>();
+        let coarse = f(&envelope(&y, 0.0, 10.0, 0.0, 100.0, 10));
+        assert_eq!(coarse.len(), 30);
+        assert_eq!((coarse[1], coarse[2]), (0.0, 99.0));
+        let fine = f(&envelope(&y, 0.0, 10.0, 10.0, 11.0, 100));
+        assert_eq!(fine.len() / 3, 11); // samples 100..=110: both window edges included
+        assert!(fine.chunks(3).all(|c| c[1] == c[2]));
+    }
+}

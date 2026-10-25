@@ -1,0 +1,11 @@
+/target
+.DS_Store
+apps/macos/.build
+apps/macos/build
+apps/macos/Frameworks
+apps/macos/Sources/SimpleFP/Generated
+# Not redistributed: TDT's MATLAB SDK (get it from tdt.com) and MATLAB autosaves/archives
+legacy/matlab/scripts/TDTbin2mat/
+legacy/matlab/scripts/*.zip
+*.asv
+desktop.ini

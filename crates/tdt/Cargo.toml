@@ -1,0 +1,9 @@
+[package]
+name = "simplefp-tdt"
+description = "Native reader for Tucker-Davis Technologies (TDT) tanks: TSQ/TEV/SEV streams and epocs."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]

@@ -1,0 +1,2581 @@
+**Analysis of GACh3.0 Fiber Photometry Data: Methods, Best Practices,
+and Advanced Techniques**\
+I. Introduction to GACh3.0 Fiber Photometry Analysis\
+A. Significance of Acetylcholine Monitoring with GACh3.0\
+Acetylcholine (ACh) is a paramount neurotransmitter, integral to a vast
+array of brain functions, including learning, memory consolidation,
+attentional processes, and the regulation of sleep-wake cycles.^1^ The
+advent of genetically encoded (GE) sensors, such as GACh3.0, has
+revolutionized the study of ACh dynamics, permitting researchers to
+monitor its release with unprecedented spatiotemporal precision in
+awake, behaving animals.^1^ GACh3.0, an optimized iteration within the
+family of G-protein-coupled receptor (GPCR)-based ACh sensors
+(GRAB\<sub\>ACh\</sub\>), offers significant improvements in sensitivity
+and kinetic properties over earlier versions and alternative detection
+methodologies.^3^ A particularly salient feature of GACh3.0 is its
+capacity to resolve rapid, transient decreases in ACh levels associated
+with specific behavioral or cognitive events, a capability critical for
+understanding the nuanced roles of cholinergic signaling.^4^
+Consequently, the precise measurement of ACh dynamics using tools like
+GACh3.0 is indispensable for dissecting the complex neural circuits that
+underpin a wide spectrum of behaviors and for elucidating the
+cholinergic dysregulation implicated in various neurological and
+psychiatric disorders.^1^\
+**B. Overview of the Fiber Photometry Data Analysis Workflow**\
+The analysis of data acquired through fiber photometry is a multi-stage
+process designed to extract biologically meaningful signals from raw
+fluorescence measurements. This workflow typically commences with data
+acquisition, where fluorescence signals from the ACh-sensitive sensor
+(e.g., excited at \~465-470 nm for green sensors like GACh3.0) and a
+control, isosbestic wavelength (typically \~405-415 nm) are
+simultaneously recorded.^7^ The subsequent pre-processing steps are
+crucial and involve the application of digital filters to remove noise,
+correction of artifacts arising from animal movement and photobleaching,
+and estimation of the baseline fluorescence (F0).^9^ Following
+pre-processing, the signal is normalized, commonly by calculating the
+change in fluorescence relative to baseline (ΔF/F) or by converting to a
+z-score.^12^ The final stage often involves event-related analysis,
+where these normalized signals are aligned to specific behavioral events
+or stimuli, or correlated with continuous behavioral readouts to
+investigate the relationship between cholinergic activity and
+behavior.^7^ Each step in this pipeline is pivotal, as raw fluorescence
+data are invariably contaminated by various noise sources,
+motion-induced artifacts, and the progressive decay of signal due to
+photobleaching, all of which can obscure or distort the underlying
+neural signals.^6^\
+**C. Critical Need for Robust Methodologies**\
+The selection and implementation of analytical methods in fiber
+photometry profoundly influence the interpretation of experimental
+outcomes. A significant challenge in the field is the lack of
+universally standardized analysis techniques, which can lead to
+considerable variability in results and hinder direct comparisons
+between studies.^17^ Artifacts inherent in fiber photometry
+recordings---including system-related noise (e.g., electrical
+interference), photobleaching of the sensor and tissue autofluorescence,
+movement-related signal fluctuations, and hemodynamic changes---can
+easily confound the true neural signals if not meticulously and
+appropriately addressed.^11^\
+The increasing adoption and accessibility of fiber photometry, combined
+with the expanding repertoire of sophisticated genetically encoded
+sensors like GACh3.0, underscore an urgent and growing necessity for the
+neuroscience community to embrace and implement rigorous, transparent,
+and validated data analysis pipelines.^7^ Without a concerted effort
+towards methodological standardization and best practices, the field
+risks generating findings that may lack reproducibility or are prone to
+misinterpretation. This is particularly pertinent given that raw fiber
+photometry data, while rich in potential, are susceptible to numerous
+confounding factors.^6^ The variability in analysis approaches currently
+employed ^17^ means that conclusions drawn from similar experimental
+paradigms could differ merely due to analytical choices. Therefore, a
+robust understanding and consistent application of best-practice
+analysis methods are not merely desirable but are fundamental to
+ensuring the validity, reliability, and translational impact of research
+utilizing this powerful *in vivo* recording technique.\
+**II. Analysis of Methods in Ortiz-Guzman et al. (2024) for GACh3.0
+Recordings**\
+A. Overview of the Study\'s Use of GACh3.0\
+The study by Ortiz-Guzman et al. (2024), titled \"Cholinergic Basal
+Forebrain Connectivity to the Basolateral Amygdala Modulates Food
+Intake,\" employed the GACh3.0 sensor to investigate the role of
+cholinergic projections from the basal forebrain (BFc) to the
+basolateral amygdala (BLA) in the regulation of feeding behaviors.^25^
+The authors utilized *in vivo* acetylcholine sensor imaging with GACh3.0
+within the BLA of mice. Complementing this, they also performed imaging
+with the genetically encoded calcium indicator GCaMP, suggesting a
+multi-modal strategy aimed at correlating cholinergic signaling with
+broader neural activity patterns within the BLA circuit during
+feeding.^25^ This approach allows for a more comprehensive understanding
+of how specific neurotransmitter systems influence local circuit
+activity and, ultimately, behavior.\
+**B. Specific Data Analysis Methods (Motion Correction, Filtering, F0,
+Normalization)**\
+A critical aspect of the user\'s query is the identification of the
+specific data analysis pipeline used by Ortiz-Guzman et al. (2024) for
+their GACh3.0 fiber photometry recordings. This includes details on
+motion artifact removal, signal filtering techniques and parameters,
+methods for F0 (baseline fluorescence) estimation, and the specific
+normalization procedures (e.g., ΔF/F calculation, z-scoring) applied to
+the GACh3.0 data.\
+It is important to note that the provided research material,
+specifically snippet ^25^ which directly links to the published paper\'s
+abstract and initial sections, outlines the study\'s biological
+questions, experimental model (mice), viral tracing strategies, and the
+general application of GACh3.0 and GCaMP sensors.^25^ However, this
+snippet, along with other general search results like ^25^, does not
+contain the detailed methodology for fiber photometry signal processing.
+Such specifics are typically found within the comprehensive \"Materials
+and Methods\" section of a full peer-reviewed article.\
+Consequently, without access to the complete \"Materials and Methods\"
+section of Ortiz-Guzman et al. (2024) beyond what is available in the
+provided snippets, a definitive and detailed analysis of *their
+specific* processing steps for GACh3.0 data cannot be conducted based
+solely on the supplied information. This report will therefore proceed
+by outlining best practices and common techniques, which would be the
+expected components of a rigorous analysis pipeline for such data.\
+The absence of detailed signal processing methods in readily accessible
+parts of a publication, such as the abstract or introductory material
+^25^, is not uncommon. However, for the principles of scientific
+reproducibility and critical evaluation, these methodological details
+are absolutely essential and are a standard expectation for the full
+\"Materials and Methods\" section. If such details were found to be
+sparse or ambiguously described even within the complete published
+paper, it would constitute a limitation of that specific study, as it
+would impede the ability of other researchers to replicate the findings,
+validate the conclusions, or build directly upon the work. This
+highlights a broader challenge in scientific publishing where
+comprehensive and transparent reporting of complex data analysis
+pipelines is sometimes insufficient, potentially hindering scientific
+progress.\
+**III. Best Practices in GACh3.0 Fiber Photometry Data Processing**\
+The successful interpretation of fiber photometry data, particularly
+from sensitive neurotransmitter sensors like GACh3.0, hinges on a series
+of carefully executed data processing steps. These steps aim to mitigate
+artifacts and extract the true underlying biological signal.\
+**A. Pre-processing and Initial Signal Conditioning**\
+1. Raw Data Inspection and Quality Control\
+The initial step in any robust fiber photometry analysis pipeline is a
+thorough inspection of the raw data traces from both the signal (e.g.,
+\~470 nm excitation for GACh3.0) and the control/isosbestic (e.g., \~405
+nm excitation) channels. This visual check is critical for identifying
+overt problems such as LED malfunction, intermittent fiber optic cable
+disconnections, signal saturation due to excessive LED power, or periods
+of unusually high noise.^11^ Any segments of data deemed invalid due to
+such technical issues (e.g., logged disconnections or clear signal loss)
+should be excluded from further analysis to prevent the introduction of
+spurious results.^11^\
+Early and meticulous quality control is of paramount importance.
+Artifacts that are introduced at the level of the experimental setup or
+hardware---for instance, a loosely connected fiber patch cord,
+inappropriate LED power settings leading to signal saturation or
+excessive photobleaching, or significant light leakage---cannot always
+be perfectly rectified through post-hoc computational methods. Such
+uncorrected or poorly corrected artifacts can lead to profound
+misinterpretations of the data. Therefore, documenting these initial
+quality control checks and, where possible, rectifying issues during or
+immediately after data acquisition, is significantly more effective than
+relying exclusively on subsequent computational correction algorithms.\
+**2. Low-Pass Filtering**\
+Rationale: Raw fiber photometry signals are often contaminated with
+high-frequency noise. This noise can originate from various sources,
+including electrical components of the photometry system (e.g., 50/60 Hz
+electrical hum), detector noise, or other rapid, non-physiological
+fluctuations.^11^ Low-pass filtering is applied to attenuate these
+high-frequency components, as the biological signals captured by
+neurotransmitter sensors like GACh3.0 typically occur on slower
+timescales (sub-second to seconds) relative to this noise.^4^\
+Cutoff Selection: The choice of the low-pass filter\'s cutoff frequency
+is a critical parameter. It must be selected judiciously, taking into
+account the known response kinetics of the GACh3.0 sensor and the
+specific characteristics of the noise present in the recording.^11^ For
+instance, the GACh2.0 sensor, a precursor to GACh3.0, exhibits response
+kinetics in the range of hundreds of milliseconds (e.g., rise time \~200
+ms, decay time \~700 ms).^2^ While GACh3.0 is an optimized sensor, its
+fundamental response characteristics will still be considerably slower
+than very high-frequency noise. Common practice involves using cutoff
+frequencies in the range of 1-10 Hz. For example, the GuPPy analysis
+toolkit employs a moving average filter, which acts as a low-pass filter
+^23^, and other studies have reported specific cutoff values, such as 3
+Hz.^26^\
+A crucial consideration for GACh3.0 is its documented ability to measure
+rapid decreases in ACh levels, for example, within 250 ms following
+certain stimuli.^4^ This capability for resolving fast physiological
+changes means that the low-pass filter cutoff must be chosen with
+particular care. An excessively low cutoff frequency (e.g., below 2 Hz)
+risks attenuating or smoothing out these important, rapid cholinergic
+dynamics, potentially leading to a loss of critical temporal
+information. Conversely, a cutoff set too high may not adequately remove
+the contaminating noise. Therefore, an optimal cutoff frequency is one
+that effectively preserves the true physiological signal dynamics while
+sufficiently attenuating noise, a balance that requires careful
+consideration of the sensor\'s kinetic properties and the specific
+signal features of interest.\
+Filter Type: To prevent the introduction of artificial time lags or
+phase distortions into the data, zero-phase filters are strongly
+recommended. This can be achieved by applying a filter (e.g., a
+Butterworth filter) in both the forward and reverse directions or by
+using a centered moving average filter, as is implemented in the GuPPy
+software.^23^\
+**3. Addressing Photobleaching**\
+Nature of Photobleaching: Photobleaching is an unavoidable phenomenon in
+fluorescence imaging, characterized by an irreversible decline in the
+fluorescence intensity of a fluorophore (and also tissue
+autofluorescence) over periods of prolonged or repeated light
+exposure.^15^ In fiber photometry, this manifests as a gradual, often
+exponential, decay in the recorded signal baseline throughout a
+recording session.\
+Role of Isosbestic Channel: A primary method for correcting
+photobleaching involves the use of the isosbestic control channel. Since
+this channel is also subject to photobleaching (as it involves light
+delivery and fluorescence detection from the same tissue volume and
+optical path), fitting the isosbestic channel\'s signal to the GACh3.0
+signal channel and subsequently performing normalization (e.g., ΔF/F
+calculation) inherently helps to correct for the photobleaching effects
+that are common to both channels.^4^\
+Detrending Methods (if no isosbestic channel is available or for
+supplementary correction):
+ 
+-   Exponential Fits: The decay due to photobleaching is often
+    well-approximated by single or double exponential functions. Fitting
+    such functions to the signal trend and then subtracting this fit is
+    a common detrending approach.^21^ The GuPPy toolkit, for instance,
+    can implement an exponential fit for photobleaching correction if an
+    isosbestic channel was not recorded or is not used.^23^ Similarly,
+    the FiPhA platform offers options for modeling photobleaching
+    effects using linear or exponential models.^12^
+ 
+-   Polynomial Fits: While less commonly used specifically for
+    photobleaching, polynomial functions can be employed as part of a
+    broader detrending strategy to remove slow drifts from the
+    signal.^29^ However, high-order polynomials risk overfitting the
+    data.
+ 
+-   Other Baseline Fitting Algorithms: Techniques such as Adaptive
+    Iteratively Reweighted Penalized Least Squares (airPLS) or other
+    specialized baseline fitting algorithms can be effective for
+    removing complex baseline drifts, but they typically require careful
+    optimization of multiple parameters.\
+    The interplay between isosbestic correction and other detrending
+    methods is important. While the isosbestic channel serves as the
+    primary means for photobleaching correction, the effectiveness of
+    this correction is contingent upon a robust and accurate fit of the
+    control channel to the signal channel. In scenarios involving very
+    long recording durations or complex bleaching profiles that are not
+    perfectly mirrored in the isosbestic channel, it may be necessary to
+    apply additional detrending procedures to the *corrected* signal
+    (i.e., after isosbestic-based correction).^15^ However, it is
+    generally advised against applying detrending methods *before* the
+    isosbestic correction step, as this can interfere with the proper
+    scaling and fitting of the control channel.^15^ This suggests a
+    hierarchical approach: primary correction via the isosbestic fit,
+    followed by a potential secondary detrending of the resultant signal
+    if slow, non-artifactual drifts persist or if the initial correction
+    was incomplete.\
+    **B. Motion Artifact Correction: Leveraging the Isosbestic
+    Control**\
+    Motion artifacts are a significant source of contamination in fiber
+    photometry recordings from freely moving animals. These artifacts
+    arise from physical movements of the animal, which can cause bending
+    of the fiber optic cable, slight shifts in the implant position
+    relative to the targeted brain tissue, or changes in light coupling
+    efficiency. Such events lead to fluctuations in the detected
+    fluorescence intensity that are unrelated to neural activity.\
+    **1. Principles of Isosbestic Correction**\
+    The cornerstone of motion artifact correction in modern fiber
+    photometry is the use of an isosbestic control channel.^7^ For green
+    fluorescent sensors like GACh3.0 (which is excited by blue light,
+    typically \~465-470 nm), the isosbestic excitation wavelength is
+    usually around 405-415 nm (violet light). At this isosbestic point,
+    the fluorescence emission of the sensor is largely independent of
+    its binding to the target ligand (in this case, ACh).^7^ Therefore,
+    fluctuations observed in the fluorescence signal elicited by
+    isosbestic excitation are presumed to reflect non-specific changes
+    common to both the signal and control channels. These include
+    artifacts due to motion, fiber bending, hemodynamic changes
+    (variations in blood flow or oxygenation that alter light
+    absorption/scattering), and, as discussed earlier,
+    photobleaching.^7^ The assumption is that these artifacts affect
+    both the signal and control channels in a proportional manner.\
+    **2. Fitting the Control Channel (e.g., 405nm) to the Signal Channel
+    (e.g., 465nm for GACh3.0)**\
+    To remove motion artifacts, the control channel (405 nm) is
+    mathematically fitted to the signal channel (465 nm). The fitted
+    control trace then serves as an estimate of the artifactual
+    component within the signal channel.
+ 
++----------+----------+----------+----------+----------+----------+
+| -        | P        | Math     | Ad       | D        | Key      |
+| Ordinary | rinciple | ematical | vantages | isadvant | Consid   |
+|          |          | Basis    |          | ages/Lim | erations |
+|    Least |          | (Brief)  |          | itations | for      |
+|          |          |          |          |          | GACh3.0  |
+|  Squares |          |          |          |          | Data     |
+|          |          |          |          |          |          |
+|    (OLS) |          |          |          |          |          |
+|     Reg  |          |          |          |          |          |
+| ression: |          |          |          |          |          |
+|     This |          |          |          |          |          |
+|     is a |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   widely |          |          |          |          |          |
+|     used |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   method |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    where |          |          |          |          |          |
+|     a    |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   linear |          |          |          |          |          |
+|     re   |          |          |          |          |          |
+| gression |          |          |          |          |          |
+|     is   |          |          |          |          |          |
+|     p    |          |          |          |          |          |
+| erformed |          |          |          |          |          |
+|     to   |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    scale |          |          |          |          |          |
+|     and  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    align |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  control |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  channel |          |          |          |          |          |
+|     to   |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   signal |          |          |          |          |          |
+|          |          |          |          |          |          |
+| channel. |          |          |          |          |          |
+|     The  |          |          |          |          |          |
+|     pa   |          |          |          |          |          |
+| rameters |          |          |          |          |          |
+|     of   |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|     fit  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   (slope |          |          |          |          |          |
+|     and  |          |          |          |          |          |
+|     in   |          |          |          |          |          |
+| tercept) |          |          |          |          |          |
+|     are  |          |          |          |          |          |
+|     de   |          |          |          |          |          |
+| termined |          |          |          |          |          |
+|     by   |          |          |          |          |          |
+|     mi   |          |          |          |          |          |
+| nimizing |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|     sum  |          |          |          |          |          |
+|     of   |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  squared |          |          |          |          |          |
+|     dif  |          |          |          |          |          |
+| ferences |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  between |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   signal |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  channel |          |          |          |          |          |
+|     and  |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   scaled |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  control |          |          |          |          |          |
+|     chan |          |          |          |          |          |
+| nel.^11^ |          |          |          |          |          |
+|     TDT  |          |          |          |          |          |
+|          |          |          |          |          |          |
+| provides |          |          |          |          |          |
+|          |          |          |          |          |          |
+| examples |          |          |          |          |          |
+|     that |          |          |          |          |          |
+|     dem  |          |          |          |          |          |
+| onstrate |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  fitting |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|     405  |          |          |          |          |          |
+|     nm   |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  channel |          |          |          |          |          |
+|     to   |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|     465  |          |          |          |          |          |
+|     nm   |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  channel |          |          |          |          |          |
+|     for  |          |          |          |          |          |
+|     de   |          |          |          |          |          |
+| trending |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    purpo |          |          |          |          |          |
+| ses.^10^ |          |          |          |          |          |
+|     The  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   fitted |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  control |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   signal |          |          |          |          |          |
+|     is   |          |          |          |          |          |
+|     then |          |          |          |          |          |
+|     t    |          |          |          |          |          |
+| ypically |          |          |          |          |          |
+|     su   |          |          |          |          |          |
+| btracted |          |          |          |          |          |
+|     from |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|     raw  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   signal |          |          |          |          |          |
+|          |          |          |          |          |          |
+| channel, |          |          |          |          |          |
+|     or   |          |          |          |          |          |
+|     used |          |          |          |          |          |
+|     as   |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|     den  |          |          |          |          |          |
+| ominator |          |          |          |          |          |
+|     (F0  |          |          |          |          |          |
+|     ) in |          |          |          |          |          |
+|     ΔF/F |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    calcu |          |          |          |          |          |
+| lations. |          |          |          |          |          |
+|          |          |          |          |          |          |
+| -   Ite  |          |          |          |          |          |
+| ratively |          |          |          |          |          |
+|     Re   |          |          |          |          |          |
+| weighted |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    Least |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  Squares |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  (IRLS): |          |          |          |          |          |
+|     IRLS |          |          |          |          |          |
+|     re   |          |          |          |          |          |
+| gression |          |          |          |          |          |
+|     is   |          |          |          |          |          |
+|     incr |          |          |          |          |          |
+| easingly |          |          |          |          |          |
+|     rec  |          |          |          |          |          |
+| ommended |          |          |          |          |          |
+|     as a |          |          |          |          |          |
+|     more |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   robust |          |          |          |          |          |
+|     alt  |          |          |          |          |          |
+| ernative |          |          |          |          |          |
+|     to   |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  OLS.^4^ |          |          |          |          |          |
+|     The  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  primary |          |          |          |          |          |
+|     a    |          |          |          |          |          |
+| dvantage |          |          |          |          |          |
+|     of   |          |          |          |          |          |
+|     IRLS |          |          |          |          |          |
+|     is   |          |          |          |          |          |
+|     its  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  reduced |          |          |          |          |          |
+|     sen  |          |          |          |          |          |
+| sitivity |          |          |          |          |          |
+|     to   |          |          |          |          |          |
+|     o    |          |          |          |          |          |
+| utliers. |          |          |          |          |          |
+|     In   |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    fiber |          |          |          |          |          |
+|     ph   |          |          |          |          |          |
+| otometry |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    data, |          |          |          |          |          |
+|     true |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   neural |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  signals |          |          |          |          |          |
+|     (es  |          |          |          |          |          |
+| pecially |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   large, |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    rapid |          |          |          |          |          |
+|     tra  |          |          |          |          |          |
+| nsients) |          |          |          |          |          |
+|     can  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   appear |          |          |          |          |          |
+|     as   |          |          |          |          |          |
+|     \"ou |          |          |          |          |          |
+| tliers\" |          |          |          |          |          |
+|     from |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|     per  |          |          |          |          |          |
+| spective |          |          |          |          |          |
+|     of a |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   simple |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   linear |          |          |          |          |          |
+|     rela |          |          |          |          |          |
+| tionship |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  between |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   signal |          |          |          |          |          |
+|     and  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  control |          |          |          |          |          |
+|     c    |          |          |          |          |          |
+| hannels, |          |          |          |          |          |
+|     as   |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    these |          |          |          |          |          |
+|     tr   |          |          |          |          |          |
+| ansients |          |          |          |          |          |
+|     are  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  present |          |          |          |          |          |
+|     only |          |          |          |          |          |
+|     in   |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   signal |          |          |          |          |          |
+|          |          |          |          |          |          |
+| channel. |          |          |          |          |          |
+|     OLS  |          |          |          |          |          |
+|     can  |          |          |          |          |          |
+|     be   |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   unduly |          |          |          |          |          |
+|     in   |          |          |          |          |          |
+| fluenced |          |          |          |          |          |
+|     by   |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    these |          |          |          |          |          |
+|     o    |          |          |          |          |          |
+| utliers, |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  leading |          |          |          |          |          |
+|     to a |          |          |          |          |          |
+|     su   |          |          |          |          |          |
+| boptimal |          |          |          |          |          |
+|     fit  |          |          |          |          |          |
+|     of   |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|     art  |          |          |          |          |          |
+| ifactual |          |          |          |          |          |
+|     co   |          |          |          |          |          |
+| mponent. |          |          |          |          |          |
+|     IRLS |          |          |          |          |          |
+|     a    |          |          |          |          |          |
+| ddresses |          |          |          |          |          |
+|     this |          |          |          |          |          |
+|     by   |          |          |          |          |          |
+|     ite  |          |          |          |          |          |
+| ratively |          |          |          |          |          |
+|     a    |          |          |          |          |          |
+| ssigning |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  weights |          |          |          |          |          |
+|     to   |          |          |          |          |          |
+|     data |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  points, |          |          |          |          |          |
+|     with |          |          |          |          |          |
+|          |          |          |          |          |          |
+| outliers |          |          |          |          |          |
+|     r    |          |          |          |          |          |
+| eceiving |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    lower |          |          |          |          |          |
+|          |          |          |          |          |          |
+| weights. |          |          |          |          |          |
+|     This |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   allows |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|     re   |          |          |          |          |          |
+| gression |          |          |          |          |          |
+|     to   |          |          |          |          |          |
+|     more |          |          |          |          |          |
+|     ac   |          |          |          |          |          |
+| curately |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  capture |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   shared |          |          |          |          |          |
+|     art  |          |          |          |          |          |
+| ifactual |          |          |          |          |          |
+|     co   |          |          |          |          |          |
+| mponent, |          |          |          |          |          |
+|     disr |          |          |          |          |          |
+| egarding |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    parts |          |          |          |          |          |
+|     of   |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   signal |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  channel |          |          |          |          |          |
+|     that |          |          |          |          |          |
+|     are  |          |          |          |          |          |
+|     not  |          |          |          |          |          |
+|     well |          |          |          |          |          |
+|     p    |          |          |          |          |          |
+| redicted |          |          |          |          |          |
+|     by   |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  control |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  channel |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   (i.e., |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   neural |          |          |          |          |          |
+|     sign |          |          |          |          |          |
+| al).^11^ |          |          |          |          |          |
+|          |          |          |          |          |          |
+| Tukey\'s |          |          |          |          |          |
+|          |          |          |          |          |          |
+| bisquare |          |          |          |          |          |
+|     is a |          |          |          |          |          |
+|          |          |          |          |          |          |
+| commonly |          |          |          |          |          |
+|     used |          |          |          |          |          |
+|     w    |          |          |          |          |          |
+| eighting |          |          |          |          |          |
+|          |          |          |          |          |          |
+| function |          |          |          |          |          |
+|     in   |          |          |          |          |          |
+|     IRLS |          |          |          |          |          |
+|     for  |          |          |          |          |          |
+|     ph   |          |          |          |          |          |
+| otometry |          |          |          |          |          |
+|     d    |          |          |          |          |          |
+| ata.^11^ |          |          |          |          |          |
+|          |          |          |          |          |          |
+| -   Two  |          |          |          |          |          |
+| -Channel |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   Motion |          |          |          |          |          |
+|          |          |          |          |          |          |
+| Artifact |          |          |          |          |          |
+|     Co   |          |          |          |          |          |
+| rrection |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  (TMAC): |          |          |          |          |          |
+|     TMAC |          |          |          |          |          |
+|     re   |          |          |          |          |          |
+| presents |          |          |          |          |          |
+|     a    |          |          |          |          |          |
+|     more |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   sophis |          |          |          |          |          |
+| ticated, |          |          |          |          |          |
+|     mod  |          |          |          |          |          |
+| el-based |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    appro |          |          |          |          |          |
+| ach.^30^ |          |          |          |          |          |
+|     It   |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  employs |          |          |          |          |          |
+|     a    |          |          |          |          |          |
+|     ge   |          |          |          |          |          |
+| nerative |          |          |          |          |          |
+|     sta  |          |          |          |          |          |
+| tistical |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    model |          |          |          |          |          |
+|     that |          |          |          |          |          |
+|     ex   |          |          |          |          |          |
+| plicitly |          |          |          |          |          |
+|          |          |          |          |          |          |
+| attempts |          |          |          |          |          |
+|     to   |          |          |          |          |          |
+|     de   |          |          |          |          |          |
+| convolve |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|          |          |          |          |          |          |
+| observed |          |          |          |          |          |
+|     fluo |          |          |          |          |          |
+| rescence |          |          |          |          |          |
+|     in   |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|     two  |          |          |          |          |          |
+|          |          |          |          |          |          |
+| channels |          |          |          |          |          |
+|     into |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    three |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   latent |          |          |          |          |          |
+|     com  |          |          |          |          |          |
+| ponents: |          |          |          |          |          |
+|     a    |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   shared |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   motion |          |          |          |          |          |
+|     a    |          |          |          |          |          |
+| rtifact, |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   neural |          |          |          |          |          |
+|          |          |          |          |          |          |
+| activity |          |          |          |          |          |
+|          |          |          |          |          |          |
+| (present |          |          |          |          |          |
+|     only |          |          |          |          |          |
+|     in   |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   signal |          |          |          |          |          |
+|     c    |          |          |          |          |          |
+| hannel), |          |          |          |          |          |
+|     and  |          |          |          |          |          |
+|          |          |          |          |          |          |
+| channel- |          |          |          |          |          |
+| specific |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   noise. |          |          |          |          |          |
+|          |          |          |          |          |          |
+| Bayesian |          |          |          |          |          |
+|     i    |          |          |          |          |          |
+| nference |          |          |          |          |          |
+|     is   |          |          |          |          |          |
+|     then |          |          |          |          |          |
+|     used |          |          |          |          |          |
+|     to   |          |          |          |          |          |
+|          |          |          |          |          |          |
+| estimate |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    these |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   latent |          |          |          |          |          |
+|     com  |          |          |          |          |          |
+| ponents. |          |          |          |          |          |
+|     TMAC |          |          |          |          |          |
+|     may  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    offer |          |          |          |          |          |
+|     more |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  precise |          |          |          |          |          |
+|          |          |          |          |          |          |
+| artifact |          |          |          |          |          |
+|     cor  |          |          |          |          |          |
+| rection, |          |          |          |          |          |
+|     part |          |          |          |          |          |
+| icularly |          |          |          |          |          |
+|     in   |          |          |          |          |          |
+|     si   |          |          |          |          |          |
+| tuations |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    where |          |          |          |          |          |
+|     cha  |          |          |          |          |          |
+| nnel-ind |          |          |          |          |          |
+| ependent |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    noise |          |          |          |          |          |
+|     is   |          |          |          |          |          |
+|     sub  |          |          |          |          |          |
+| stantial |          |          |          |          |          |
+|     or   |          |          |          |          |          |
+|     when |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|     rela |          |          |          |          |          |
+| tionship |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  between |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|          |          |          |          |          |          |
+| artifact |          |          |          |          |          |
+|     in   |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|     two  |          |          |          |          |          |
+|          |          |          |          |          |          |
+| channels |          |          |          |          |          |
+|     is   |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    compl |          |          |          |          |          |
+| ex.^30^\ |          |          |          |          |          |
+|     The  |          |          |          |          |          |
+|     e    |          |          |          |          |          |
+| volution |          |          |          |          |          |
+|     of   |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    these |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   method |          |          |          |          |          |
+| s---from |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   simple |          |          |          |          |          |
+|     rat  |          |          |          |          |          |
+| iometric |          |          |          |          |          |
+|     ap   |          |          |          |          |          |
+| proaches |          |          |          |          |          |
+|     or   |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   direct |          |          |          |          |          |
+|     subt |          |          |          |          |          |
+| raction, |          |          |          |          |          |
+|     to   |          |          |          |          |          |
+|     OLS  |          |          |          |          |          |
+|     reg  |          |          |          |          |          |
+| ression, |          |          |          |          |          |
+|     then |          |          |          |          |          |
+|     to   |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|     more |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   robust |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    IRLS, |          |          |          |          |          |
+|     and  |          |          |          |          |          |
+|     now  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  towards |          |          |          |          |          |
+|          |          |          |          |          |          |
+| advanced |          |          |          |          |          |
+|     mod  |          |          |          |          |          |
+| el-based |          |          |          |          |          |
+|     te   |          |          |          |          |          |
+| chniques |          |          |          |          |          |
+|     like |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  TMAC--- |          |          |          |          |          |
+| reflects |          |          |          |          |          |
+|     a    |          |          |          |          |          |
+|     co   |          |          |          |          |          |
+| ntinuous |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   effort |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   within |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|     neur |          |          |          |          |          |
+| oscience |          |          |          |          |          |
+|     c    |          |          |          |          |          |
+| ommunity |          |          |          |          |          |
+|     to   |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  achieve |          |          |          |          |          |
+|     more |          |          |          |          |          |
+|          |          |          |          |          |          |
+| accurate |          |          |          |          |          |
+|     and  |          |          |          |          |          |
+|          |          |          |          |          |          |
+| reliable |          |          |          |          |          |
+|     i    |          |          |          |          |          |
+| solation |          |          |          |          |          |
+|     of   |          |          |          |          |          |
+|     true |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   neural |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  signals |          |          |          |          |          |
+|     from |          |          |          |          |          |
+|     cont |          |          |          |          |          |
+| aminated |          |          |          |          |          |
+|          |          |          |          |          |          |
+|    fiber |          |          |          |          |          |
+|     ph   |          |          |          |          |          |
+| otometry |          |          |          |          |          |
+|     rec  |          |          |          |          |          |
+| ordings. |          |          |          |          |          |
+|     This |          |          |          |          |          |
+|     pro  |          |          |          |          |          |
+| gression |          |          |          |          |          |
+|     s    |          |          |          |          |          |
+| ignifies |          |          |          |          |          |
+|     an   |          |          |          |          |          |
+|     in   |          |          |          |          |          |
+| creasing |          |          |          |          |          |
+|     rec  |          |          |          |          |          |
+| ognition |          |          |          |          |          |
+|     of   |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  complex |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   nature |          |          |          |          |          |
+|     of   |          |          |          |          |          |
+|     a    |          |          |          |          |          |
+| rtifacts |          |          |          |          |          |
+|     and  |          |          |          |          |          |
+|     the  |          |          |          |          |          |
+|          |          |          |          |          |          |
+| inherent |          |          |          |          |          |
+|     lim  |          |          |          |          |          |
+| itations |          |          |          |          |          |
+|     of   |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  simpler |          |          |          |          |          |
+|     co   |          |          |          |          |          |
+| rrection |          |          |          |          |          |
+|     m    |          |          |          |          |          |
+| ethods.\ |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  **Table |          |          |          |          |          |
+|     1:   |          |          |          |          |          |
+|     Co   |          |          |          |          |          |
+| mparison |          |          |          |          |          |
+|     of   |          |          |          |          |          |
+|     Is   |          |          |          |          |          |
+| osbestic |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  Control |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   Signal |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  Fitting |          |          |          |          |          |
+|          |          |          |          |          |          |
+|  Methods |          |          |          |          |          |
+|     for  |          |          |          |          |          |
+|          |          |          |          |          |          |
+|   Motion |          |          |          |          |          |
+|          |          |          |          |          |          |
+| Artifact |          |          |          |          |          |
+|     Corr |          |          |          |          |          |
+| ection** |          |          |          |          |          |
+|          |          |          |          |          |          |
+| Method   |          |          |          |          |          |
++----------+----------+----------+----------+----------+----------+
+| Ordinary | Fits     | Linear   | Simple   | Highly   | May      |
+| Least    | control  | reg      | to       | s        | misa     |
+| Squares  | to       | ression: | im       | ensitive | ttribute |
+| (OLS)    | signal   | S        | plement, | to       | parts of |
+|          | by       | ignal≈β0 | computa  | outliers | fast ACh |
+|          | mi       | +β1      | tionally | (e.g.,   | tr       |
+|          | nimizing | ×Control | inex     | large    | ansients |
+|          | sum of   |          | pensive. | neural   | as       |
+|          | squared  |          |          | tr       | a        |
+|          | re       |          |          | ansients | rtifacts |
+|          | siduals. |          |          | in the   | if       |
+|          |          |          |          | signal   | tr       |
+|          |          |          |          | c        | ansients |
+|          |          |          |          | hannel), | are      |
+|          |          |          |          | which    | large.   |
+|          |          |          |          | can skew |          |
+|          |          |          |          | the fit  |          |
+|          |          |          |          | and lead |          |
+|          |          |          |          | to       |          |
+|          |          |          |          | in       |          |
+|          |          |          |          | complete |          |
+|          |          |          |          | artifact |          |
+|          |          |          |          | removal. |          |
+|          |          |          |          | ^11^     |          |
++----------+----------+----------+----------+----------+----------+
+| Ite      | Similar  | Weighted | Robust   | More     | P        |
+| ratively | to OLS,  | linear   | to       | computa  | referred |
+| Re       | but      | reg      | o        | tionally | method   |
+| weighted | ite      | ression, | utliers, | i        | for      |
+| Least    | ratively | weights  | g        | ntensive | GACh3.0  |
+| Squares  | assigns  | updated  | enerally | than OLS | due to   |
+| (IRLS)   | lower    | based on | provides | (though  | its      |
+|          | weights  | r        | a better | t        | rob      |
+|          | to       | esiduals | fit of   | ypically | ustness, |
+|          | o        | from     | the true | not      | ensuring |
+|          | utliers, | previous | shared   | prohi    | that     |
+|          | reducing | it       | art      | bitive). | genuine  |
+|          | their    | eration. | ifactual | Requires | ACh      |
+|          | i        | ^11^     | c        | choice   | signals  |
+|          | nfluence |          | omponent | of a     | are less |
+|          | on the   |          | compared | w        | likely   |
+|          | fit.     |          | to OLS.  | eighting | to be    |
+|          |          |          | ^6^      | function | absorbed |
+|          |          |          |          | (e.g.,   | into the |
+|          |          |          |          | Tukey\'s | artifact |
+|          |          |          |          | bi       | model.   |
+|          |          |          |          | square). | ^11^     |
++----------+----------+----------+----------+----------+----------+
+| Two      | S        | Bayesian | Mode     | More     | May      |
+| -Channel | pecifies | i        | l-based, | complex  | offer    |
+| Motion   | a        | nference | ex       | to       | superior |
+| Artifact | ge       | on a     | plicitly | i        | co       |
+| Co       | nerative | latent   | s        | mplement | rrection |
+| rrection | model    | variable | eparates | and      | if       |
+| (TMAC)   | for both | model.   | neural   | und      | GACh3.0  |
+|          | c        | Assumes  | activity | erstand. | signals  |
+|          | hannels, | Gaussian | from     | Computa  | are      |
+|          | incor    | process  | motion.  | tionally | subtle   |
+|          | porating | priors   | Can      | more     | or if    |
+|          | latent   | for      | account  | de       | cha      |
+|          | neural   | motion   | for      | manding. | nnel-ind |
+|          | a        | and      | cha      | Relies   | ependent |
+|          | ctivity, | a        | nnel-ind | on model | noise is |
+|          | motion,  | ctivity. | ependent | assu     | a        |
+|          | and      | ^30^     | noise.   | mptions. | sig      |
+|          | noise.   |          | Pot      |          | nificant |
+|          |          |          | entially |          | issue.   |
+|          |          |          | more     |          | Requires |
+|          |          |          | a        |          | careful  |
+|          |          |          | ccurate. |          | paramete |
+|          |          |          | ^30^     |          | rization |
+|          |          |          |          |          | of       |
+|          |          |          |          |          | priors.  |
++----------+----------+----------+----------+----------+----------+
+ 
+**3. Sufficiency of Isosbestic Correction vs. Need for Additional
+Detrending**\
+While the fitting of an isosbestic control signal is fundamental for
+correcting acute motion artifacts and the primary component of
+photobleaching, it may not always remove all sources of baseline drift
+or very slow signal fluctuations.^15^ Some of these slow drifts might
+have a biological origin (e.g., extremely slow, tonic shifts in
+acetylcholine levels that are not the primary focus of an event-related
+analysis) or might arise from instrumental factors not perfectly
+correlated between the two channels over very long timescales.\
+Therefore, even after robust isosbestic correction and subsequent ΔF/F
+calculation, it may sometimes be necessary to apply an additional
+detrending step to the *corrected* signal. This is particularly relevant
+when analyzing phasic, event-related neural signals against a baseline
+that still exhibits some slow, residual drift. If such additional
+detrending is deemed necessary, methods like applying a smoothed moving
+median are generally recommended over a simple moving mean. A moving
+median is less likely to be influenced by, and thus inadvertently
+remove, the actual phasic neural signals of interest, a problem to which
+a moving mean can be susceptible (analogous to the outlier sensitivity
+of OLS regression).^15^\
+**C. Baseline (F0) Estimation for Normalization**\
+1. Importance of F0\
+The baseline fluorescence, denoted as F0, is a critical reference point
+in fiber photometry analysis. Normalization methods, particularly the
+widely used ΔF/F calculation, express the change in fluorescence (ΔF) as
+a fraction of this baseline level. Therefore, an accurate and
+appropriate estimation of F0 is essential for obtaining reliable and
+interpretable normalized signals. Errors or biases in F0 estimation will
+directly propagate to the normalized signal, potentially distorting the
+perceived magnitude and kinetics of neural responses.\
+**2. Methods for F0 Determination**\
+Several approaches exist for determining F0, often leveraging the
+information from the isosbestic control channel:
+ 
+-   Using the Entire Fitted Isosbestic/Control Trace as F0: This is a
+    very common and often robust method. After the control channel
+    (e.g., 405 nm) has been fitted to the signal channel (e.g., 465 nm)
+    using a regression technique (like OLS or, preferably, IRLS), the
+    resulting fitted trace itself is used as the F0 for each time point
+    in the recording. The ΔF/F is then calculated as: (Signalraw
+    −FittedControl)/FittedControl.^11^ This approach has the advantage
+    of providing a dynamic F0 that continuously accounts for
+    photobleaching and other slow artifacts that are captured by the
+    control channel and reflected in the fit. The GuPPy analysis
+    toolkit, for example, employs this method.^23^
+ 
+-   Averaging a Pre-event or Sliding Baseline Window:
+ 
+    -   Pre-event Baseline: Particularly in event-related experimental
+        designs, F0 can be defined as the average fluorescence of the
+        signal channel (or, more robustly, the fitted control trace or
+        the artifact-corrected signal trace) during a defined period
+        immediately preceding each discrete event of interest.^14^ For
+        instance, FiPhA describes normalization relative to a baseline
+        reference interval \'r\', where the mean of this interval (r̄)
+        serves as F0.^12^ This method localizes the F0 estimation to the
+        period just before a potential stimulus-evoked change, making it
+        specific to the conditions immediately preceding that event.
+ 
+    -   Sliding Window: A moving average or moving median can be
+        calculated over a sliding window of the signal trace (or the
+        fitted control trace) to generate a continuously adapting F0.
+        The size of this window is a critical parameter; it must be long
+        enough to smooth out rapid neural transients but short enough to
+        adapt to slower, genuine baseline shifts.\
+        **3. Implications of Different F0 Selection Strategies**\
+        The choice of F0 estimation strategy can have significant
+        implications for the final normalized signal:
+ 
+```{=html}
+<!-- -->
+```
+-   Entire Fitted Isosbestic Trace as F0: This method offers continuous
+    correction for artifacts like photobleaching that are
+    well-represented in the control channel\'s fit. It is generally
+    suitable for analyzing phasic responses against a slowly changing
+    baseline. However, a potential pitfall is that if the regression fit
+    is imperfect, or if there are very slow, genuine neural signals that
+    happen to correlate with some component of the control channel\'s
+    activity (even if not causally related), these neural signals might
+    be partially regressed out or incorporated into the F0, thereby
+    diminishing their apparent magnitude in the ΔF/F trace.
+ 
+-   Pre-event Baseline Average: This approach is often more robust to
+    very slow, sustained changes in neural activity that occur over the
+    course of an entire recording session, as it defines the baseline
+    locally for each event. This can prevent such long-term tonic shifts
+    from being misinterpreted as baseline drift by a globally defined
+    F0. However, this method assumes that the chosen pre-event period is
+    indeed a true, quiescent baseline, free of anticipatory activity or
+    other confounding signals. It can also be sensitive to noise or
+    random fluctuations occurring within that specific pre-event
+    window.\
+    The optimal strategy for F0 selection can depend on the specific
+    characteristics of the neural signal being investigated (e.g., rapid
+    phasic responses versus slower tonic changes) and the overall
+    duration of the recording. For analyzing rapid, event-locked phasic
+    signals, using a pre-event baseline for F0 calculation can be highly
+    appropriate, as it tailors the baseline to the immediate temporal
+    context of the event. For longer recordings where the primary
+    interest lies in tracking overall activity patterns or phasic events
+    occurring against a backdrop of slow drifts (like photobleaching),
+    using the entire fitted control trace as a dynamic F0 is a common
+    and effective practice for continuous artifact correction. The
+    decision should be guided by the experimental question and the
+    expected temporal dynamics of the ACh signal.\
+    **D. Signal Normalization: ΔF/F and Z-score**\
+    Once artifacts have been addressed and a baseline (F0) has been
+    estimated, the fluorescence signal is typically normalized.
+    Normalization serves to account for variations in absolute
+    fluorescence intensity that can arise from differences in sensor
+    expression levels, implant depth or quality, light source power, and
+    detector sensitivity across animals, sessions, or even within a
+    single long recording (due to photobleaching if not perfectly
+    corrected by F0). The two most common normalization methods are ΔF/F
+    and z-scoring.\
+    **1. ΔF/F Calculation**\
+    ΔF/F represents the change in fluorescence (ΔF=F−F0) relative to the
+    baseline fluorescence (F0), and is often expressed as a percentage
+    change.
+ 
+```{=html}
+<!-- -->
+```
+-   Common Formulas:
+ 
+    -   The general conceptual formula is ΔF/F=(F−F0)/F0.
+ 
+    -   When an isosbestic control channel is used, and its fitted
+        version (FittedControl) is taken as F0, a robust and widely
+        adopted formula, notably advocated by Lerner et al. (2015) and
+        implemented in tools like GuPPy, is: ΔF/F=(Signalraw
+        −FittedControl)/FittedControl.^11^ This formula effectively uses
+        the fitted control trace as a dynamic baseline that corrects for
+        shared artifacts.
+ 
+    -   The FiPhA toolkit calculates ΔF/F as (xi −rˉ)/rˉ, where xi is
+        the current signal value and r̄ is the mean of a user-defined
+        reference (baseline) interval.^12^\
+        **2. Z-score Calculation**\
+        The z-score transforms the signal by expressing each data point
+        in terms of its deviation from a mean, scaled by the standard
+        deviation. This represents the change in units of standard
+        deviation.
+ 
+```{=html}
+<!-- -->
+```
+-   Standard Z-score: Calculated as z=(X−μ)/σ, where X is the signal
+    value (often the already artifact-corrected or ΔF/F signal), and μ
+    and σ are the mean and standard deviation, respectively, of either
+    the entire recording trace or a defined baseline period.^14^
+ 
+-   Baseline-Referenced Z-score: In this variation, μ and σ are
+    specifically calculated from a designated baseline period (e.g., a
+    pre-event window). GuPPy offers this option.^23^
+ 
+-   Robust/Modified Z-score: To reduce sensitivity to outliers that can
+    affect the mean and standard deviation, a robust z-score can be
+    calculated using the median and the Median Absolute Deviation (MAD)
+    instead. FiPhA implements a robust z-score as RZi (x)=(%ΔF/Fi
+    (x)−median(%ΔF/F(r)))/MAD(%ΔF/F(r)).^14^ GuPPy also offers a
+    modified z-score using median and MAD.^23^\
+    **3. Comparative Analysis: ΔF/F vs. Z-score for GACh3.0 Signals**\
+    The choice between ΔF/F and z-score normalization is not trivial and
+    has been a subject of considerable discussion and emerging consensus
+    in the fiber photometry field.
+ 
+```{=html}
+<!-- -->
+```
+-   ΔF/F:
+ 
+    -   *Pros:* ΔF/F provides a more direct and intuitive measure of the
+        relative change in fluorescence, which can be more closely
+        related to the underlying concentration changes of the analyte
+        (e.g., ACh). It is generally preferred for analyzing the
+        kinetics and magnitude of spontaneous neurotransmitter release
+        events, as it is less likely to distort true signal amplitudes
+        if F0 is accurately estimated and artifacts are
+        well-corrected.^17^
+ 
+    -   *Cons:* ΔF/F values can be sensitive to the accuracy of F0
+        estimation. If F0 is very small or noisy, the resulting ΔF/F can
+        be unstable or artificially inflated. Comparisons of ΔF/F
+        magnitudes across different animals or recording sessions can
+        sometimes be challenging if there are substantial variations in
+        baseline fluorescence levels (due to differences in sensor
+        expression, optical fiber placement, etc.) that are not fully
+        accounted for by the F0 determination method.
+ 
++----------------------+----------------------+----------------------+
+| -   Z-score:         | ΔF/F (e.g.,          | Z-score (e.g., (X -  |
+|                      | (Signal -            | μbaseline ) /        |
+|     -   *Pros:*      | FittedIsosbestic) /  | σbaseline )          |
+|         Z-scoring    | FittedIsosbestic)    |                      |
+|         normalizes   |                      |                      |
+|         the signal   |                      |                      |
+|         with respect |                      |                      |
+|         to its own   |                      |                      |
+|         variance,    |                      |                      |
+|         which can    |                      |                      |
+|         facilitate   |                      |                      |
+|         comparisons  |                      |                      |
+|         of signal    |                      |                      |
+|         dynamics     |                      |                      |
+|         across       |                      |                      |
+|         different    |                      |                      |
+|         animals,     |                      |                      |
+|         sessions, or |                      |                      |
+|         experimental |                      |                      |
+|         conditions,  |                      |                      |
+|         especially   |                      |                      |
+|         if absolute  |                      |                      |
+|         fluorescence |                      |                      |
+|         levels or    |                      |                      |
+|         ΔF/F         |                      |                      |
+|         magnitudes   |                      |                      |
+|         vary widely. |                      |                      |
+|         It is often  |                      |                      |
+|         used for     |                      |                      |
+|         event        |                      |                      |
+|         detection,   |                      |                      |
+|         where a      |                      |                      |
+|         threshold is |                      |                      |
+|         set based on |                      |                      |
+|         a certain    |                      |                      |
+|         number of    |                      |                      |
+|         standard     |                      |                      |
+|         deviations   |                      |                      |
+|         from the     |                      |                      |
+|         mean.        |                      |                      |
+|                      |                      |                      |
+|     -   *Cons:* A    |                      |                      |
+|         significant  |                      |                      |
+|         drawback of  |                      |                      |
+|         z-scoring is |                      |                      |
+|         that it can  |                      |                      |
+|         obscure the  |                      |                      |
+|         true         |                      |                      |
+|         magnitude of |                      |                      |
+|         fluorescence |                      |                      |
+|         changes.     |                      |                      |
+|         More         |                      |                      |
+|         critically,  |                      |                      |
+|         it has been  |                      |                      |
+|         shown to be  |                      |                      |
+|         particularly |                      |                      |
+|         problematic  |                      |                      |
+|         for          |                      |                      |
+|         analyzing    |                      |                      |
+|         spontaneous  |                      |                      |
+|         signals or   |                      |                      |
+|         when         |                      |                      |
+|         experimental |                      |                      |
+|                      |                      |                      |
+|        interventions |                      |                      |
+|         might alter  |                      |                      |
+|         the baseline |                      |                      |
+|         variability  |                      |                      |
+|         of the       |                      |                      |
+|         signal       |                      |                      |
+|         itself.^4^   |                      |                      |
+|         If a         |                      |                      |
+|         manipulation |                      |                      |
+|         reduces the  |                      |                      |
+|         true signal  |                      |                      |
+|         (e.g., ACh   |                      |                      |
+|         release), it |                      |                      |
+|         might also   |                      |                      |
+|         reduce the   |                      |                      |
+|         signal\'s    |                      |                      |
+|         variance.    |                      |                      |
+|         Z-scoring in |                      |                      |
+|         such a case  |                      |                      |
+|         could        |                      |                      |
+|                      |                      |                      |
+|        paradoxically |                      |                      |
+|         show little  |                      |                      |
+|         change or    |                      |                      |
+|         even an      |                      |                      |
+|         increase in  |                      |                      |
+|         the          |                      |                      |
+|                      |                      |                      |
+|       \"normalized\" |                      |                      |
+|         signal if    |                      |                      |
+|         the          |                      |                      |
+|         remaining    |                      |                      |
+|         noise        |                      |                      |
+|         becomes a    |                      |                      |
+|         larger       |                      |                      |
+|         proportion   |                      |                      |
+|         of the       |                      |                      |
+|         diminished   |                      |                      |
+|         variance.    |                      |                      |
+|         Conversely,  |                      |                      |
+|         it can also  |                      |                      |
+|         mask true    |                      |                      |
+|         increases in |                      |                      |
+|         signal if    |                      |                      |
+|         variance     |                      |                      |
+|         also         |                      |                      |
+|         increases.   |                      |                      |
+|         Several      |                      |                      |
+|         recent       |                      |                      |
+|         studies and  |                      |                      |
+|         preprints    |                      |                      |
+|         have         |                      |                      |
+|         provided     |                      |                      |
+|         compelling   |                      |                      |
+|         evidence     |                      |                      |
+|         that         |                      |                      |
+|         z-scoring    |                      |                      |
+|         can fail to  |                      |                      |
+|         detect       |                      |                      |
+|         pharm        |                      |                      |
+| acologically-induced |                      |                      |
+|         changes in   |                      |                      |
+|         spontaneous  |                      |                      |
+|         dopamine     |                      |                      |
+|         signals that |                      |                      |
+|         are clearly  |                      |                      |
+|         evident when |                      |                      |
+|         using a      |                      |                      |
+|         %ΔF/F        |                      |                      |
+|                      |                      |                      |
+|       analysis.^17^\ |                      |                      |
+|         A growing    |                      |                      |
+|         body of      |                      |                      |
+|         evidence and |                      |                      |
+|         expert       |                      |                      |
+|         opinion,     |                      |                      |
+|         particularly |                      |                      |
+|         highlighted  |                      |                      |
+|         in recent    |                      |                      |
+|         publications |                      |                      |
+|         ^17^,        |                      |                      |
+|         suggests     |                      |                      |
+|         that         |                      |                      |
+|         z-scoring is |                      |                      |
+|         often an     |                      |                      |
+|                      |                      |                      |
+|        inappropriate |                      |                      |
+|         method for   |                      |                      |
+|         the final    |                      |                      |
+|                      |                      |                      |
+|       quantification |                      |                      |
+|         of           |                      |                      |
+|         spontaneous  |                      |                      |
+|                      |                      |                      |
+|     neurotransmitter |                      |                      |
+|         release      |                      |                      |
+|         dynamics and |                      |                      |
+|         for          |                      |                      |
+|         assessing    |                      |                      |
+|         the true     |                      |                      |
+|         magnitude of |                      |                      |
+|         changes in   |                      |                      |
+|         signal       |                      |                      |
+|         kinetics. It |                      |                      |
+|         may \"remove |                      |                      |
+|         variation of |                      |                      |
+|         experimental |                      |                      |
+|         interest\"   |                      |                      |
+|         or amplify   |                      |                      |
+|         noise under  |                      |                      |
+|         certain      |                      |                      |
+|                      |                      |                      |
+|      conditions.^17^ |                      |                      |
+|         For these    |                      |                      |
+|         reasons,     |                      |                      |
+|         ΔF/F, when   |                      |                      |
+|         calculated   |                      |                      |
+|         robustly     |                      |                      |
+|         with careful |                      |                      |
+|         attention to |                      |                      |
+|         artifact     |                      |                      |
+|         correction   |                      |                      |
+|         and F0       |                      |                      |
+|         estimation,  |                      |                      |
+|         is generally |                      |                      |
+|         favored for  |                      |                      |
+|         quantitative |                      |                      |
+|         analysis.    |                      |                      |
+|         Z-scoring    |                      |                      |
+|         might still  |                      |                      |
+|         have a role  |                      |                      |
+|         in certain   |                      |                      |
+|         types of     |                      |                      |
+|         event        |                      |                      |
+|         detection or |                      |                      |
+|         for          |                      |                      |
+|                      |                      |                      |
+|        standardizing |                      |                      |
+|         signals for  |                      |                      |
+|         some         |                      |                      |
+|         comparative  |                      |                      |
+|                      |                      |                      |
+|      visualizations, |                      |                      |
+|         but its use  |                      |                      |
+|         for          |                      |                      |
+|         quantifying  |                      |                      |
+|         effect sizes |                      |                      |
+|         on signal    |                      |                      |
+|         amplitude or |                      |                      |
+|         frequency of |                      |                      |
+|         spontaneous  |                      |                      |
+|         events       |                      |                      |
+|         should be    |                      |                      |
+|         approached   |                      |                      |
+|         with extreme |                      |                      |
+|         caution.\    |                      |                      |
+|                      |                      |                      |
+|       Recommendation |                      |                      |
+|         for GACh3.0: |                      |                      |
+|         For          |                      |                      |
+|         analyzing    |                      |                      |
+|                      |                      |                      |
+|        event-related |                      |                      |
+|         phasic       |                      |                      |
+|         responses of |                      |                      |
+|         GACh3.0,     |                      |                      |
+|         either ΔF/F  |                      |                      |
+|         or a         |                      |                      |
+|         carefully    |                      |                      |
+|         implemented  |                      |                      |
+|                      |                      |                      |
+|  baseline-referenced |                      |                      |
+|         z-score      |                      |                      |
+|         might be     |                      |                      |
+|         acceptable   |                      |                      |
+|         if used      |                      |                      |
+|         consistently |                      |                      |
+|         and if       |                      |                      |
+|         baseline     |                      |                      |
+|         periods are  |                      |                      |
+|         chosen       |                      |                      |
+|                      |                      |                      |
+|       appropriately. |                      |                      |
+|         However, for |                      |                      |
+|                      |                      |                      |
+|        investigating |                      |                      |
+|         tonic        |                      |                      |
+|         changes in   |                      |                      |
+|         ACh levels   |                      |                      |
+|         or the       |                      |                      |
+|                      |                      |                      |
+|      characteristics |                      |                      |
+|         of           |                      |                      |
+|         spontaneous  |                      |                      |
+|         ACh release, |                      |                      |
+|         ΔF/F is      |                      |                      |
+|         likely the   |                      |                      |
+|         more         |                      |                      |
+|         appropriate  |                      |                      |
+|         and less     |                      |                      |
+|         misleading   |                      |                      |
+|                      |                      |                      |
+|        normalization |                      |                      |
+|         method.\     |                      |                      |
+|         **Table 2:   |                      |                      |
+|         Comparison   |                      |                      |
+|         of           |                      |                      |
+|                      |                      |                      |
+|        Normalization |                      |                      |
+|         Strategies   |                      |                      |
+|         (ΔF/F vs.    |                      |                      |
+|         Z-score) for |                      |                      |
+|         GACh3.0      |                      |                      |
+|         Fiber        |                      |                      |
+|         Photometry   |                      |                      |
+|         Data**       |                      |                      |
+|                      |                      |                      |
+| Feature              |                      |                      |
++----------------------+----------------------+----------------------+
+| Typical Calculation  | (F−F0)/F0            | (X−μ)/σ              |
++----------------------+----------------------+----------------------+
+| F0/Baseline          | Often the entire     | Mean (μ) and         |
+| Definition           | fitted isosbestic    | standard deviation   |
+|                      | trace (dynamic F0)   | (σ) of the entire    |
+|                      | or mean of a         | trace or a specific  |
+|                      | pre-event baseline   | baseline period.     |
+|                      | period. ^11^         | ^14^                 |
++----------------------+----------------------+----------------------+
+| Strengths            | \- More direct       | \- Facilitates       |
+|                      | reflection of        | comparison across    |
+|                      | relative             | subjects/sessions by |
+|                      | fluorescence change. | normalizing to       |
+|                      | \<br\> - Generally   | variance. \<br\> -   |
+|                      | preferred for        | Can be useful for    |
+|                      | quantifying          | event detection      |
+|                      | spontaneous signals  | based on deviation   |
+|                      | and true amplitude   | from baseline        |
+|                      | changes. ^17^        | variability.         |
+|                      | \<br\> - More        |                      |
+|                      | intuitive            |                      |
+|                      | interpretation       |                      |
+|                      | related to sensor    |                      |
+|                      | response.            |                      |
++----------------------+----------------------+----------------------+
+| Weaknesses           | \- Sensitive to F0   | \- Can obscure true  |
+|                      | estimation accuracy. | magnitude of         |
+|                      | \<br\> - Comparisons | fluorescence         |
+|                      | across animals can   | changes. \<br\> -    |
+|                      | be challenging if    | Problematic for      |
+|                      | absolute F0 varies   | spontaneous signals  |
+|                      | greatly (unless F0   | or when baseline     |
+|                      | is very stable or    | variance changes     |
+|                      | well-corrected).     | with manipulation    |
+|                      |                      | (may amplify noise   |
+|                      |                      | or mask effects).    |
+|                      |                      | ^17^ \<br\> - Less   |
+|                      |                      | direct link to       |
+|                      |                      | physiological        |
+|                      |                      | concentration        |
+|                      |                      | changes.             |
++----------------------+----------------------+----------------------+
+| Suitability for      | \- Phasic            | \- Phasic            |
+| GACh3.0 Signal Types | Event-Related: Good. | Event-Related: Use   |
+|                      | \<br\> - Tonic       | with caution,        |
+|                      | Shifts: Good, if F0  | especially for       |
+|                      | is dynamic and       | amplitude            |
+|                      | robust. \<br\> -     | quantification. May  |
+|                      | Spontaneous          | be acceptable for    |
+|                      | Fluctuations:        | detection or timing. |
+|                      | Generally preferred. | \<br\> - Tonic       |
+|                      |                      | Shifts: Generally    |
+|                      |                      | not recommended if   |
+|                      |                      | baseline variance    |
+|                      |                      | changes. \<br\> -    |
+|                      |                      | Spontaneous          |
+|                      |                      | Fluctuations:        |
+|                      |                      | Generally not        |
+|                      |                      | recommended for      |
+|                      |                      | quantification. ^17^ |
++----------------------+----------------------+----------------------+
+| Key Caveats &        | Ensure robust F0     | Use with extreme     |
+| Recommendations      | estimation and       | caution for          |
+|                      | artifact correction. | quantifying signal   |
+|                      | Consider potential   | amplitudes or        |
+|                      | for F0 instability   | frequencies,         |
+|                      | if not using a       | especially for       |
+|                      | dynamic F0.          | spontaneous signals  |
+|                      |                      | or longitudinal      |
+|                      |                      | studies with         |
+|                      |                      | interventions. ^17^  |
+|                      |                      | Consider robust      |
+|                      |                      | z-score variants if  |
+|                      |                      | used. Always         |
+|                      |                      | validate against     |
+|                      |                      | ΔF/F.                |
++----------------------+----------------------+----------------------+
+ 
+**E. Considerations Specific to GACh3.0 Sensor Characteristics**\
+The specific properties of the GACh3.0 sensor itself should inform both
+data acquisition strategies and analytical choices to ensure that the
+recorded signals accurately reflect underlying cholinergic dynamics.\
+**1. GACh3.0 Kinetics**
+ 
+-   EC50 (Half-maximal Effective Concentration): The EC50 of GACh3.0 in
+    HEK293T cells is reported to be approximately 2.2 µM.^35^ This value
+    indicates the concentration of ACh at which the sensor exhibits half
+    of its maximal fluorescence response, providing insight into the
+    physiological range of ACh concentrations the sensor is most
+    sensitive to.
+ 
+-   Response Speed: GACh3.0 has been demonstrated to be capable of
+    measuring rapid decreases in task-evoked ACh levels, with responses
+    observed within 250 ms.^4^ Its predecessor, GACh2.0, had reported
+    kinetics of approximately 200 ms for rise time (τrise ) and 700 ms
+    for decay time (τdecay ).^2^ Although specific on-off rates for
+    GACh3.0 are not extensively detailed in the provided material, its
+    characterization as an \"optimized\" sensor suggests it is
+    well-suited for tracking physiologically relevant ACh transients,
+    including relatively fast events.\
+    **2. Impact on Acquisition Parameters**
+ 
+```{=html}
+<!-- -->
+```
+-   Sampling Rate: The data acquisition sampling rate must be adequate
+    to capture the fastest expected dynamics of ACh release and reuptake
+    as reported by GACh3.0. Given that the sensor can respond within
+    \~200-250 ms, the Nyquist-Shannon sampling theorem dictates that the
+    sampling rate should be at least twice the highest frequency
+    component of interest. To faithfully capture such rapid events, a
+    minimal sampling rate would be above 8-10 Hz. However, to achieve
+    better temporal resolution and more accurately define the shape of
+    these transients, higher sampling rates are generally preferred.
+    Rates in the range of 20-100 Hz are commonly used in fiber
+    photometry ^37^, though one source notes that for millisecond-level
+    calcium changes, extremely high acquisition frequencies might be
+    unnecessary.^37^ For GACh3.0, a sampling rate between 20 Hz and 50
+    Hz likely represents a good balance between temporal fidelity and
+    data volume. It is noted that for a red-shifted ACh sensor (rACh1h),
+    which is reported to have faster kinetics than GACh3.0, data
+    acquisition at 10 Hz was used in one study ^35^, suggesting that
+    even 10 Hz might be considered adequate by some for certain ACh
+    sensors, though higher rates are generally safer for capturing fast
+    transients.\
+    **3. Impact on Analysis Choices**
+ 
+```{=html}
+<!-- -->
+```
+-   Filter Parameters: The choice of low-pass filter cutoff frequency is
+    directly influenced by the sensor\'s kinetics. To preserve true,
+    fast ACh transients (e.g., those occurring within 200-300 ms), the
+    cutoff frequency should be set sufficiently high (e.g., typically
+    \>2-4 Hz, and potentially higher depending on the precise speed of
+    the fastest relevant physiological event and the desired temporal
+    resolution) while still effectively removing higher frequency
+    noise.^11^ Applying a filter with a very low cutoff (e.g., 1 Hz)
+    could artificially slow down, diminish, or even obliterate these
+    rapid physiological changes, leading to an inaccurate representation
+    of ACh dynamics.
+ 
+-   Baseline Window Selection: When performing event-related analyses,
+    the time window selected for F0 calculation (if using a pre-event
+    baseline method) must be carefully chosen to avoid encroaching on
+    the earliest phase of the ACh response. If the baseline window
+    inadvertently includes part of the rising or falling phase of an ACh
+    transient, the F0 estimate will be inaccurate, consequently
+    distorting the calculated ΔF/F.\
+    The known kinetic properties of the GACh3.0 sensor should serve as a
+    direct guide for selecting appropriate data acquisition and analysis
+    parameters. For example, if the research question involves analyzing
+    very rapid, cue-induced dips in ACh concentration, the entire
+    processing pipeline---from sampling rate during acquisition to the
+    low-pass filter cutoff and the definition of baseline windows for F0
+    estimation---must be optimized to preserve these fast temporal
+    features. Failure to do so, for instance by over-filtering the data
+    or using an inappropriately placed baseline window, could lead to a
+    significant underestimation or mischaracterization of the true speed
+    and magnitude of cholinergic signaling events. This underscores the
+    need for a holistic approach where sensor characteristics inform
+    every step of the data acquisition and analysis workflow.\
+    **IV. Recommended Analysis Pipelines and Available Tools**\
+    A variety of software tools and analysis pipelines are available to
+    researchers working with fiber photometry data. These range from
+    comprehensive open-source toolkits with graphical user interfaces
+    (GUIs) to vendor-specific software development kits (SDKs) that
+    allow for more customized scripting.\
+    **A. Overview of Established Open-Source Toolkits and Vendor
+    Resources**\
+    1. GuPPy (Guided Photometry Analysis in Python)\
+    GuPPy is a free, open-source tool developed in Python and presented
+    as a Jupyter notebook, designed to be accessible for users with
+    minimal programming experience through its GUIs.^18^
+ 
+```{=html}
+<!-- -->
+```
+-   Key Features: GuPPy handles isosbestic correction by fitting the
+    control channel to the signal channel using a least-squares
+    polynomial fit. If an isosbestic channel is not available or not
+    used, it can generate a control trace by applying an exponential fit
+    to the signal channel to approximate photobleaching.^23^ It
+    calculates ΔF/F using the formula:
+    (Signal−FittedControl)/FittedControl. GuPPy also offers options for
+    z-score normalization, including standard z-score,
+    baseline-referenced z-score, and a modified z-score using median and
+    MAD. For signal smoothing, it applies a moving average filter. Peak
+    detection is implemented based on thresholding the z-score trace
+    using the median absolute deviation within a moving window.^23^\
+    **2. FiPhA (Fiber Photometry Analysis)**\
+    FiPhA is a general-purpose fiber photometry analysis application
+    built as an R Shiny app, making it highly interactive and
+    user-friendly.^12^ It supports data import from a wide range of
+    photometry systems and formats, including TDT, Plexon, and
+    spectrally resolved systems.
+ 
+```{=html}
+<!-- -->
+```
+-   Key Features: FiPhA offers functionalities such as linear unmixing
+    for spectrally resolved data, photobleaching correction using linear
+    or exponential models, and various normalization options including
+    ΔF/F, standard z-score, and robust z-score.^12^ For ΔF/F
+    calculation, F0 is typically determined from the mean of a
+    user-defined reference (baseline) interval. It also provides tools
+    for event-triggered averaging and filtering of behavioral
+    events.^12^\
+    **3. TMAC (Two-channel Motion Artifact Correction)**\
+    TMAC is not a standalone GUI toolkit but rather a computational
+    method based on a generative statistical model and Bayesian
+    inference, designed to separate neural activity, motion artifact,
+    and noise from two-channel imaging data.^30^
+ 
+```{=html}
+<!-- -->
+```
+-   Key Features: Its strength lies in its model-based approach to
+    artifact correction, which may offer advantages over simpler
+    regression methods, especially when channel-independent noise is
+    significant. Implementation of TMAC would typically require custom
+    scripting or integration into a broader analysis pipeline.\
+    **4. Vendor-Specific Tools/Examples**
+ 
+```{=html}
+<!-- -->
+```
+-   Tucker-Davis Technologies (TDT): TDT provides robust support for
+    data analysis through its MATLAB and Python Software Development
+    Kits (SDKs). Key functions include TDTbin2mat for importing data
+    into MATLAB and the tdt Python package for Python-based
+    analysis.^41^ TDT also offers example scripts and workbooks for
+    common analysis tasks, such as peri-event epoch averaging and
+    fitting the 405 nm control channel to the 465 nm signal channel for
+    detrending/artifact correction.^10^ Their Synapse software is used
+    for data acquisition, and Pynapse can be used for integrating
+    behavioral control and performing some online data processing.^41^
+ 
+-   Plexon: Plexon\'s Multi-Wavelength Photometry System comes with
+    software that allows visualization of raw data and heatmaps. The
+    system is designed to interleave excitation for the signal
+    wavelength (e.g., 465 nm) and the isosbestic control wavelength
+    (e.g., 410 nm), facilitating artifact correction.^44^\
+    **5. Other Community Tools**
+ 
+```{=html}
+<!-- -->
+```
+-   pMAT and pyPhotometry: These are mentioned as other available
+    open-source analysis pipelines.^7^
+ 
+-   PhAT (Photometry Analysis Toolkit): This is another GUI-based,
+    Python-driven toolkit designed for flexibility. It supports data
+    import from various sources, including Neurophotometrics systems and
+    BORIS behavioral scoring software. PhAT offers options for signal
+    normalization and alignment of photometry data with behavioral or
+    other event streams.^24^
+ 
+-   GitHub Repositories: Several publicly available GitHub repositories,
+    such as LeoJuh/Fiber-photometry-analysis ^47^ and
+    Tom-top/fiber_photometry_analysis ^48^, provide Python scripts
+    tailored for fiber photometry analysis, often for data acquired with
+    TDT systems. These scripts typically include steps for data
+    smoothing, baseline correction (addressing signal decay and
+    bleaching), normalization (often via standardization, resulting in a
+    z-score-like output, or ΔF/F), and regression between the signal and
+    control channels to derive a corrected signal (sometimes referred to
+    as zdF/F or dF/F).^48^\
+    **B. Guidance on Selecting or Customizing an Analysis Pipeline**\
+    The choice of an appropriate analysis pipeline or tool depends on
+    several factors:
+ 
+```{=html}
+<!-- -->
+```
+-   Data Acquisition System: Some tools are optimized for data from
+    specific vendors (e.g., GuPPy was initially developed for TDT data,
+    though expanded ^18^).
+ 
+-   Experimental Design: The nature of the experiment (e.g., discrete
+    event-related responses versus analysis of spontaneous activity or
+    long-term tonic changes) will influence the suitability of different
+    normalization and F0 estimation strategies.
+ 
+-   User\'s Programming Proficiency: GUI-based tools like GuPPy, FiPhA,
+    and PhAT are excellent starting points for researchers with limited
+    coding experience, as they provide a structured workflow and visual
+    feedback.^12^
+ 
+-   Specific Analytical Needs: For highly customized analyses, advanced
+    statistical modeling, or integration with unique behavioral
+    paradigms, scripting in Python or MATLAB using vendor SDKs or
+    custom-written code will likely be necessary.\
+    It is important to recognize that the proliferation of analysis
+    tools and pipelines underscores the fact that there is no single
+    \"one-size-fits-all\" solution for every fiber photometry
+    experiment. Researchers must develop a clear understanding of the
+    underlying assumptions and mathematical operations performed by any
+    chosen software package or script. Blindly applying a tool without
+    this understanding can lead to erroneous conclusions. The ability to
+    critically evaluate the appropriateness of a tool for specific data
+    characteristics (e.g., sensor type, noise profile) and experimental
+    questions, and ideally, the capacity to customize or at least
+    thoroughly comprehend the core algorithms, are crucial for ensuring
+    the scientific rigor of the findings.\
+    **V. Advanced Considerations and Future Perspectives**\
+    The field of fiber photometry is continually evolving, with ongoing
+    advancements in sensor technology, data acquisition methods, and
+    analytical approaches. These developments aim to enhance the
+    precision, reliability, and depth of information that can be
+    extracted from *in vivo* optical recordings.\
+    **A. Analysis of Multi-Channel Recordings**\
+    The capability to simultaneously monitor multiple neurochemical
+    signals or to correlate neurotransmitter dynamics with the activity
+    of specific neural populations is a powerful extension of fiber
+    photometry. This often involves co-expressing GACh3.0 with other
+    sensors, such as GCaMP for calcium-dependent neural activity, or
+    sensors for other neurotransmitters like dopamine or serotonin.^25^
+ 
+```{=html}
+<!-- -->
+```
+-   Technical Challenges: Multi-channel recordings necessitate careful
+    management of spectral crosstalk between different fluorophores.
+    This involves selecting sensors with well-separated excitation and
+    emission spectra, using appropriate filter sets, and potentially
+    employing spectral unmixing algorithms if significant overlap
+    exists.^35^
+ 
+-   Analytical Approaches: Data from each channel must typically be
+    processed independently through artifact correction and
+    normalization steps. Subsequent analysis then focuses on examining
+    the temporal relationships, correlations, or potential causal
+    interactions between the different recorded signals. Advanced
+    time-series analysis techniques may be employed to understand these
+    interdependencies.\
+    **B. Emerging Techniques**\
+    Several innovative techniques are emerging that promise to overcome
+    some of the limitations of traditional intensity-based fiber
+    photometry:
+ 
+```{=html}
+<!-- -->
+```
+-   Fluorescence Lifetime Photometry: This approach measures changes in
+    the fluorescence lifetime of the sensor rather than just its
+    intensity. Fluorescence lifetime can be an intrinsic property of the
+    sensor\'s state (e.g., bound vs. unbound to its ligand) and is often
+    less susceptible to variations in sensor expression levels,
+    excitation light power fluctuations, or some forms of
+    photobleaching.^49^ The GRAB-ACh3.0 sensor has been shown to exhibit
+    a significant change in fluorescence lifetime upon ACh binding,
+    making it a candidate for this technique.^49^ Lifetime-based
+    measurements could potentially offer more robust and quantitative
+    comparisons of ACh dynamics across different animals, brain regions,
+    or longitudinal recording sessions, circumventing some of the
+    challenges associated with F0 stability and intensity normalization.
+ 
+-   Functional Linear Mixed Modeling (FLMM): Traditional fiber
+    photometry analysis often involves averaging signals across many
+    trials or time-locking signals to discrete events. While useful,
+    such averaging can obscure important trial-to-trial variability or
+    subtle temporal dynamics. FLMM has been proposed as a more advanced
+    statistical framework for analyzing fiber photometry data at the
+    trial level.^19^ This approach can model the entire temporal profile
+    of the response on each trial while accounting for various sources
+    of variability (e.g., across subjects, sessions, or trials),
+    potentially offering greater statistical power and more nuanced
+    insights into how experimental variables affect neural signals over
+    time.^19^\
+    **C. The Push Towards Standardized Reporting and Analysis**\
+    There is a growing recognition within the neuroscience community of
+    the critical need for greater standardization in the analysis of
+    fiber photometry data and more transparent reporting of
+    methodological details.^6^ This movement is driven by the desire to
+    improve the reproducibility and comparability of findings across
+    different laboratories.
+ 
+```{=html}
+<!-- -->
+```
+-   Key Elements: Efforts towards standardization include the
+    development and dissemination of open-source analysis tools with
+    clear documentation, the establishment of best-practice guidelines
+    for data processing and artifact correction, and a community-wide
+    emphasis on detailed and unambiguous reporting of all analytical
+    parameters in publications.\
+    The trajectory of the field indicates a clear movement towards more
+    sophisticated analytical and statistical methodologies. These
+    advanced approaches are designed to handle the inherent
+    trial-by-trial variability in biological signals more effectively
+    and to provide richer, more nuanced insights than can be obtained
+    from simple peri-event averages or basic normalization techniques.
+    The development and adoption of techniques like FLMM and
+    fluorescence lifetime photometry are indicative of this shift,
+    promising a future where fiber photometry analysis becomes
+    increasingly quantitative, statistically rigorous, and capable of
+    extracting deeper understanding from complex *in vivo* datasets.\
+    **VI. Summary and Expert Recommendations**\
+    The analysis of GACh3.0 fiber photometry data requires a meticulous,
+    multi-step approach to transform raw fluorescence signals into
+    reliable indicators of *in vivo* acetylcholine dynamics. The
+    accuracy and interpretability of the final results are critically
+    dependent on the appropriate application of methods for artifact
+    correction, baseline estimation, and signal normalization.\
+    **A. Recap of Critical Processing Steps for GACh3.0 Fiber
+    Photometry**
+ 
+1.  Data Acquisition & Quality Control: Ensure high-quality raw data
+    acquisition with simultaneous recording of the GACh3.0 signal and an
+    isosbestic control signal. Perform initial visual inspection to
+    exclude segments with gross artifacts.
+ 
+2.  Low-Pass Filtering: Apply a zero-phase low-pass filter with a cutoff
+    frequency carefully chosen to remove high-frequency noise without
+    attenuating the true, potentially rapid, kinetics of GACh3.0
+    responses.
+ 
+3.  Motion Artifact & Photobleaching Correction: Utilize the isosbestic
+    control channel. Fit the control channel to the signal channel,
+    preferably using Iteratively Reweighted Least Squares (IRLS)
+    regression, to generate a model of shared artifacts.
+ 
+4.  F0 Estimation: Determine the baseline fluorescence (F0). A common
+    and robust method is to use the fitted isosbestic trace as a dynamic
+    F0. Alternatively, for event-related analyses, the average of a
+    pre-event period of the corrected signal or fitted isosbestic trace
+    can be used.
+ 
+5.  Normalization: Calculate ΔF/F using the formula (Signalraw
+    −F0fitted_isosbestic )/F0fitted_isosbestic . While z-scoring is an
+    option, it should be used with extreme caution for GACh3.0 data,
+    particularly for quantifying spontaneous activity or comparing
+    conditions that may alter baseline signal variance, due to its
+    potential to distort true signal changes.
+ 
+6.  Further Detrending (if necessary): For the corrected and normalized
+    signal, additional detrending (e.g., using a moving median) may be
+    applied if slow, residual drifts unrelated to the signals of
+    interest persist, especially in long recordings.\
+    **B. Key Recommendations for Ensuring Robust, Reproducible, and
+    Interpretable Results**
+ 
++-------------+-------------+-------------+-------------+-------------+
+| -   T       | Param       | Typical     | R           | Potential   |
+| ransparency | eter/Choice | Opt         | ationale/Ju | Impact if   |
+|     in      |             | ions/Ranges | stification | Suboptimal  |
+|             |             | for GACh3.0 | (GACh3.0    |             |
+|  Reporting: |             |             | Kinetics &  |             |
+|     In all  |             |             | Best        |             |
+|     pu      |             |             | Practices)  |             |
+| blications, |             |             |             |             |
+|     provide |             |             |             |             |
+|     a       |             |             |             |             |
+|     co      |             |             |             |             |
+| mprehensive |             |             |             |             |
+|     and     |             |             |             |             |
+|             |             |             |             |             |
+| unambiguous |             |             |             |             |
+|             |             |             |             |             |
+| description |             |             |             |             |
+|     of      |             |             |             |             |
+|     every   |             |             |             |             |
+|     step in |             |             |             |             |
+|     the     |             |             |             |             |
+|     data    |             |             |             |             |
+|             |             |             |             |             |
+|    analysis |             |             |             |             |
+|             |             |             |             |             |
+|   pipeline. |             |             |             |             |
+|     This    |             |             |             |             |
+|             |             |             |             |             |
+|    includes |             |             |             |             |
+|     the     |             |             |             |             |
+|             |             |             |             |             |
+|    specific |             |             |             |             |
+|             |             |             |             |             |
+|    software |             |             |             |             |
+|     used    |             |             |             |             |
+|     (with   |             |             |             |             |
+|     version |             |             |             |             |
+|             |             |             |             |             |
+|   numbers), |             |             |             |             |
+|     all     |             |             |             |             |
+|             |             |             |             |             |
+|  parameters |             |             |             |             |
+|     chosen  |             |             |             |             |
+|     for     |             |             |             |             |
+|             |             |             |             |             |
+|  filtering, |             |             |             |             |
+|             |             |             |             |             |
+|    fitting, |             |             |             |             |
+|     F0      |             |             |             |             |
+|             |             |             |             |             |
+| estimation, |             |             |             |             |
+|     and     |             |             |             |             |
+|     nor     |             |             |             |             |
+| malization, |             |             |             |             |
+|     and the |             |             |             |             |
+|     exact   |             |             |             |             |
+|             |             |             |             |             |
+|    formulas |             |             |             |             |
+|             |             |             |             |             |
+|   employed. |             |             |             |             |
+|             |             |             |             |             |
+| -           |             |             |             |             |
+|   Mandatory |             |             |             |             |
+|             |             |             |             |             |
+|  Isosbestic |             |             |             |             |
+|             |             |             |             |             |
+|    Control: |             |             |             |             |
+|     For     |             |             |             |             |
+|     GACh3.0 |             |             |             |             |
+|             |             |             |             |             |
+|  recordings |             |             |             |             |
+|     in      |             |             |             |             |
+|             |             |             |             |             |
+|    behaving |             |             |             |             |
+|             |             |             |             |             |
+|    animals, |             |             |             |             |
+|     the use |             |             |             |             |
+|     of an   |             |             |             |             |
+|             |             |             |             |             |
+|  isosbestic |             |             |             |             |
+|     control |             |             |             |             |
+|     channel |             |             |             |             |
+|             |             |             |             |             |
+|  (typically |             |             |             |             |
+|             |             |             |             |             |
+|   \~405-415 |             |             |             |             |
+|     nm      |             |             |             |             |
+|             |             |             |             |             |
+| excitation) |             |             |             |             |
+|     is      |             |             |             |             |
+|             |             |             |             |             |
+|   essential |             |             |             |             |
+|     for     |             |             |             |             |
+|     robust  |             |             |             |             |
+|             |             |             |             |             |
+|    artifact |             |             |             |             |
+|             |             |             |             |             |
+|  correction |             |             |             |             |
+|     and     |             |             |             |             |
+|     should  |             |             |             |             |
+|     be      |             |             |             |             |
+|             |             |             |             |             |
+|  considered |             |             |             |             |
+|             |             |             |             |             |
+|    standard |             |             |             |             |
+|             |             |             |             |             |
+|   practice. |             |             |             |             |
+|             |             |             |             |             |
+| -   Optimal |             |             |             |             |
+|     Fitting |             |             |             |             |
+|     Method: |             |             |             |             |
+|     As a    |             |             |             |             |
+|     minimum |             |             |             |             |
+|             |             |             |             |             |
+|   standard, |             |             |             |             |
+|     employ  |             |             |             |             |
+|     IRLS    |             |             |             |             |
+|             |             |             |             |             |
+|  regression |             |             |             |             |
+|     for     |             |             |             |             |
+|     fitting |             |             |             |             |
+|     the     |             |             |             |             |
+|             |             |             |             |             |
+|  isosbestic |             |             |             |             |
+|     control |             |             |             |             |
+|     channel |             |             |             |             |
+|     to the  |             |             |             |             |
+|     GACh3.0 |             |             |             |             |
+|     signal  |             |             |             |             |
+|             |             |             |             |             |
+|    channel. |             |             |             |             |
+|     This    |             |             |             |             |
+|             |             |             |             |             |
+|   method\'s |             |             |             |             |
+|             |             |             |             |             |
+|  robustness |             |             |             |             |
+|     to      |             |             |             |             |
+|             |             |             |             |             |
+|    outliers |             |             |             |             |
+|     offers  |             |             |             |             |
+|             |             |             |             |             |
+| significant |             |             |             |             |
+|             |             |             |             |             |
+|  advantages |             |             |             |             |
+|     over    |             |             |             |             |
+|     OLS     |             |             |             |             |
+|             |             |             |             |             |
+| regression. |             |             |             |             |
+|     For     |             |             |             |             |
+|             |             |             |             |             |
+| experiments |             |             |             |             |
+|     where   |             |             |             |             |
+|     complex |             |             |             |             |
+|             |             |             |             |             |
+|   artifacts |             |             |             |             |
+|     or      |             |             |             |             |
+|             |             |             |             |             |
+| significant |             |             |             |             |
+|             |             |             |             |             |
+|    channel- |             |             |             |             |
+| independent |             |             |             |             |
+|     noise   |             |             |             |             |
+|     are     |             |             |             |             |
+|             |             |             |             |             |
+|  suspected, |             |             |             |             |
+|             |             |             |             |             |
+|   exploring |             |             |             |             |
+|             |             |             |             |             |
+|    advanced |             |             |             |             |
+|             |             |             |             |             |
+| model-based |             |             |             |             |
+|             |             |             |             |             |
+|  approaches |             |             |             |             |
+|     like    |             |             |             |             |
+|     TMAC    |             |             |             |             |
+|     may be  |             |             |             |             |
+|             |             |             |             |             |
+| beneficial. |             |             |             |             |
+|             |             |             |             |             |
+| -           |             |             |             |             |
+|    Informed |             |             |             |             |
+|     No      |             |             |             |             |
+| rmalization |             |             |             |             |
+|     Choice: |             |             |             |             |
+|             |             |             |             |             |
+|  Critically |             |             |             |             |
+|             |             |             |             |             |
+|    evaluate |             |             |             |             |
+|     the     |             |             |             |             |
+|     choice  |             |             |             |             |
+|     between |             |             |             |             |
+|     ΔF/F    |             |             |             |             |
+|     and     |             |             |             |             |
+|     z-score |             |             |             |             |
+|     no      |             |             |             |             |
+| rmalization |             |             |             |             |
+|     based   |             |             |             |             |
+|     on the  |             |             |             |             |
+|             |             |             |             |             |
+|    specific |             |             |             |             |
+|             |             |             |             |             |
+|    research |             |             |             |             |
+|             |             |             |             |             |
+|   question, |             |             |             |             |
+|     the     |             |             |             |             |
+|     nature  |             |             |             |             |
+|     of the  |             |             |             |             |
+|     GACh3.0 |             |             |             |             |
+|     signals |             |             |             |             |
+|     being   |             |             |             |             |
+|             |             |             |             |             |
+|    analyzed |             |             |             |             |
+|     (phasic |             |             |             |             |
+|     vs.     |             |             |             |             |
+|     tonic,  |             |             |             |             |
+|     evoked  |             |             |             |             |
+|     vs.     |             |             |             |             |
+|     sp      |             |             |             |             |
+| ontaneous), |             |             |             |             |
+|     and the |             |             |             |             |
+|             |             |             |             |             |
+|   potential |             |             |             |             |
+|     impact  |             |             |             |             |
+|     of      |             |             |             |             |
+|     e       |             |             |             |             |
+| xperimental |             |             |             |             |
+|     ma      |             |             |             |             |
+| nipulations |             |             |             |             |
+|     on      |             |             |             |             |
+|             |             |             |             |             |
+|    baseline |             |             |             |             |
+|     signal  |             |             |             |             |
+|     chara   |             |             |             |             |
+| cteristics. |             |             |             |             |
+|     For     |             |             |             |             |
+|     q       |             |             |             |             |
+| uantitative |             |             |             |             |
+|             |             |             |             |             |
+|    analysis |             |             |             |             |
+|     of ACh  |             |             |             |             |
+|             |             |             |             |             |
+|   dynamics, |             |             |             |             |
+|             |             |             |             |             |
+|  especially |             |             |             |             |
+|             |             |             |             |             |
+| spontaneous |             |             |             |             |
+|     release |             |             |             |             |
+|     or the  |             |             |             |             |
+|             |             |             |             |             |
+|   magnitude |             |             |             |             |
+|     of      |             |             |             |             |
+|     evoked  |             |             |             |             |
+|             |             |             |             |             |
+|  responses, |             |             |             |             |
+|     ΔF/F is |             |             |             |             |
+|             |             |             |             |             |
+|   generally |             |             |             |             |
+|     the     |             |             |             |             |
+|             |             |             |             |             |
+|   preferred |             |             |             |             |
+|     method. |             |             |             |             |
+|     Be      |             |             |             |             |
+|     p       |             |             |             |             |
+| articularly |             |             |             |             |
+|     wary of |             |             |             |             |
+|     using   |             |             |             |             |
+|             |             |             |             |             |
+|    z-scores |             |             |             |             |
+|     for     |             |             |             |             |
+|             |             |             |             |             |
+| quantifying |             |             |             |             |
+|     changes |             |             |             |             |
+|     in      |             |             |             |             |
+|             |             |             |             |             |
+| spontaneous |             |             |             |             |
+|             |             |             |             |             |
+|    activity |             |             |             |             |
+|     or when |             |             |             |             |
+|             |             |             |             |             |
+|   comparing |             |             |             |             |
+|             |             |             |             |             |
+|  conditions |             |             |             |             |
+|     that    |             |             |             |             |
+|     might   |             |             |             |             |
+|     dif     |             |             |             |             |
+| ferentially |             |             |             |             |
+|     affect  |             |             |             |             |
+|             |             |             |             |             |
+|    baseline |             |             |             |             |
+|     signal  |             |             |             |             |
+|             |             |             |             |             |
+|   variance. |             |             |             |             |
+|             |             |             |             |             |
+| -           |             |             |             |             |
+|    Consider |             |             |             |             |
+|     Sensor  |             |             |             |             |
+|             |             |             |             |             |
+|   Kinetics: |             |             |             |             |
+|     The     |             |             |             |             |
+|     known   |             |             |             |             |
+|             |             |             |             |             |
+|    response |             |             |             |             |
+|             |             |             |             |             |
+|    kinetics |             |             |             |             |
+|     of the  |             |             |             |             |
+|     GACh3.0 |             |             |             |             |
+|     sensor  |             |             |             |             |
+|     (e.g.,  |             |             |             |             |
+|     its     |             |             |             |             |
+|     ability |             |             |             |             |
+|     to      |             |             |             |             |
+|     track   |             |             |             |             |
+|     changes |             |             |             |             |
+|     within  |             |             |             |             |
+|             |             |             |             |             |
+|   \~200-300 |             |             |             |             |
+|     ms)     |             |             |             |             |
+|     must    |             |             |             |             |
+|     inform  |             |             |             |             |
+|     the     |             |             |             |             |
+|             |             |             |             |             |
+|   selection |             |             |             |             |
+|     of data |             |             |             |             |
+|             |             |             |             |             |
+| acquisition |             |             |             |             |
+|             |             |             |             |             |
+|    sampling |             |             |             |             |
+|     rates   |             |             |             |             |
+|     and the |             |             |             |             |
+|             |             |             |             |             |
+|  parameters |             |             |             |             |
+|     for     |             |             |             |             |
+|             |             |             |             |             |
+|  analytical |             |             |             |             |
+|     steps   |             |             |             |             |
+|     like    |             |             |             |             |
+|             |             |             |             |             |
+|    low-pass |             |             |             |             |
+|             |             |             |             |             |
+|  filtering. |             |             |             |             |
+|     Ensure  |             |             |             |             |
+|     these   |             |             |             |             |
+|     choices |             |             |             |             |
+|     do not  |             |             |             |             |
+|     in      |             |             |             |             |
+| advertently |             |             |             |             |
+|     distort |             |             |             |             |
+|     or      |             |             |             |             |
+|     remove  |             |             |             |             |
+|     true    |             |             |             |             |
+|     ph      |             |             |             |             |
+| ysiological |             |             |             |             |
+|             |             |             |             |             |
+|    signals. |             |             |             |             |
+|             |             |             |             |             |
+| -           |             |             |             |             |
+|  Understand |             |             |             |             |
+|             |             |             |             |             |
+|    Analysis |             |             |             |             |
+|     Tools:  |             |             |             |             |
+|     Do not  |             |             |             |             |
+|     treat   |             |             |             |             |
+|             |             |             |             |             |
+|    analysis |             |             |             |             |
+|             |             |             |             |             |
+|    software |             |             |             |             |
+|             |             |             |             |             |
+|    packages |             |             |             |             |
+|     or      |             |             |             |             |
+|     scripts |             |             |             |             |
+|     as      |             |             |             |             |
+|     \"black |             |             |             |             |
+|             |             |             |             |             |
+|    boxes.\" |             |             |             |             |
+|     Develop |             |             |             |             |
+|     a clear |             |             |             |             |
+|     un      |             |             |             |             |
+| derstanding |             |             |             |             |
+|     of the  |             |             |             |             |
+|             |             |             |             |             |
+|  underlying |             |             |             |             |
+|             |             |             |             |             |
+|  algorithms |             |             |             |             |
+|     and     |             |             |             |             |
+|             |             |             |             |             |
+| assumptions |             |             |             |             |
+|     of any  |             |             |             |             |
+|     tool    |             |             |             |             |
+|     used.   |             |             |             |             |
+|             |             |             |             |             |
+|    Validate |             |             |             |             |
+|     its     |             |             |             |             |
+|             |             |             |             |             |
+| performance |             |             |             |             |
+|     on test |             |             |             |             |
+|     data or |             |             |             |             |
+|     with    |             |             |             |             |
+|     known   |             |             |             |             |
+|     signal  |             |             |             |             |
+|     types   |             |             |             |             |
+|     if      |             |             |             |             |
+|             |             |             |             |             |
+|   possible. |             |             |             |             |
+|             |             |             |             |             |
+| -           |             |             |             |             |
+| Incorporate |             |             |             |             |
+|     E       |             |             |             |             |
+| xperimental |             |             |             |             |
+|             |             |             |             |             |
+|   Controls: |             |             |             |             |
+|     Beyond  |             |             |             |             |
+|     co      |             |             |             |             |
+| mputational |             |             |             |             |
+|     c       |             |             |             |             |
+| orrections, |             |             |             |             |
+|     the     |             |             |             |             |
+|             |             |             |             |             |
+|   inclusion |             |             |             |             |
+|     of      |             |             |             |             |
+|             |             |             |             |             |
+| appropriate |             |             |             |             |
+|             |             |             |             |             |
+|    positive |             |             |             |             |
+|     and     |             |             |             |             |
+|             |             |             |             |             |
+|    negative |             |             |             |             |
+|     e       |             |             |             |             |
+| xperimental |             |             |             |             |
+|             |             |             |             |             |
+|    controls |             |             |             |             |
+|     (e.g.,  |             |             |             |             |
+|     phar    |             |             |             |             |
+| macological |             |             |             |             |
+|     ma      |             |             |             |             |
+| nipulations |             |             |             |             |
+|     known   |             |             |             |             |
+|     to      |             |             |             |             |
+|     alter   |             |             |             |             |
+|     ACh     |             |             |             |             |
+|     levels, |             |             |             |             |
+|     or use  |             |             |             |             |
+|     of a    |             |             |             |             |
+|     non-    |             |             |             |             |
+| fluorescent |             |             |             |             |
+|     control |             |             |             |             |
+|             |             |             |             |             |
+|  construct) |             |             |             |             |
+|     is      |             |             |             |             |
+|             |             |             |             |             |
+|  invaluable |             |             |             |             |
+|     for     |             |             |             |             |
+|             |             |             |             |             |
+|  validating |             |             |             |             |
+|     the     |             |             |             |             |
+|             |             |             |             |             |
+|  biological |             |             |             |             |
+|             |             |             |             |             |
+| specificity |             |             |             |             |
+|     of the  |             |             |             |             |
+|             |             |             |             |             |
+|    observed |             |             |             |             |
+|     fiber   |             |             |             |             |
+|             |             |             |             |             |
+|  photometry |             |             |             |             |
+|     s       |             |             |             |             |
+| ignals.^21^ |             |             |             |             |
+|             |             |             |             |             |
+| -           |             |             |             |             |
+|   Extensive |             |             |             |             |
+|     Data    |             |             |             |             |
+|     Vis     |             |             |             |             |
+| ualization: |             |             |             |             |
+|     At each |             |             |             |             |
+|     stage   |             |             |             |             |
+|     of the  |             |             |             |             |
+|             |             |             |             |             |
+|  processing |             |             |             |             |
+|     pipe    |             |             |             |             |
+| line---from |             |             |             |             |
+|     raw     |             |             |             |             |
+|     data to |             |             |             |             |
+|             |             |             |             |             |
+|   filtered, |             |             |             |             |
+|             |             |             |             |             |
+|    artifact |             |             |             |             |
+| -corrected, |             |             |             |             |
+|     and     |             |             |             |             |
+|             |             |             |             |             |
+|  normalized |             |             |             |             |
+|             |             |             |             |             |
+|  signals--- |             |             |             |             |
+| extensively |             |             |             |             |
+|             |             |             |             |             |
+|   visualize |             |             |             |             |
+|     the     |             |             |             |             |
+|     data.   |             |             |             |             |
+|     This    |             |             |             |             |
+|             |             |             |             |             |
+|    practice |             |             |             |             |
+|     is      |             |             |             |             |
+|     crucial |             |             |             |             |
+|     for     |             |             |             |             |
+|     qu      |             |             |             |             |
+| alitatively |             |             |             |             |
+|             |             |             |             |             |
+|   assessing |             |             |             |             |
+|     whether |             |             |             |             |
+|             |             |             |             |             |
+|   artifacts |             |             |             |             |
+|     are     |             |             |             |             |
+|     being   |             |             |             |             |
+|     handled |             |             |             |             |
+|     app     |             |             |             |             |
+| ropriately, |             |             |             |             |
+|             |             |             |             |             |
+|    ensuring |             |             |             |             |
+|     that    |             |             |             |             |
+|     true    |             |             |             |             |
+|     signals |             |             |             |             |
+|     are not |             |             |             |             |
+|     being   |             |             |             |             |
+|             |             |             |             |             |
+|   distorted |             |             |             |             |
+|     or      |             |             |             |             |
+|             |             |             |             |             |
+| erroneously |             |             |             |             |
+|             |             |             |             |             |
+|    removed, |             |             |             |             |
+|     and for |             |             |             |             |
+|     gaining |             |             |             |             |
+|     an      |             |             |             |             |
+|             |             |             |             |             |
+|   intuitive |             |             |             |             |
+|     un      |             |             |             |             |
+| derstanding |             |             |             |             |
+|     of the  |             |             |             |             |
+|     data\'s |             |             |             |             |
+|     charac  |             |             |             |             |
+| teristics.\ |             |             |             |             |
+|     **Table |             |             |             |             |
+|     3: Key  |             |             |             |             |
+|             |             |             |             |             |
+|  Parameters |             |             |             |             |
+|     and     |             |             |             |             |
+|     Con     |             |             |             |             |
+| siderations |             |             |             |             |
+|     in      |             |             |             |             |
+|     GACh3.0 |             |             |             |             |
+|     Fiber   |             |             |             |             |
+|             |             |             |             |             |
+|  Photometry |             |             |             |             |
+|             |             |             |             |             |
+|    Analysis |             |             |             |             |
+|             |             |             |             |             |
+|  Pipeline** |             |             |             |             |
+|             |             |             |             |             |
+| Analysis    |             |             |             |             |
+| Step        |             |             |             |             |
++-------------+-------------+-------------+-------------+-------------+
+| Raw Data    | Sampling    | 20 - 100 Hz | Must be     | Aliasing    |
+| Sampling    | Frequency   | (min. \>10  | \>2x        | (missing    |
+| Rate        | (Hz)        | Hz)         | fastest     | fast        |
+|             |             |             | GACh3.0     | events),    |
+|             |             |             | signal      | poor        |
+|             |             |             | component   | temporal    |
+|             |             |             | (responses  | definition  |
+|             |             |             | \~          | of          |
+|             |             |             | 200-300ms). | transients. |
+|             |             |             | Higher      |             |
+|             |             |             | rates       |             |
+|             |             |             | improve     |             |
+|             |             |             | temporal    |             |
+|             |             |             | resolution. |             |
+|             |             |             | ^4^         |             |
++-------------+-------------+-------------+-------------+-------------+
+| Low-Pass    | Cutoff      | 2 - 10 Hz   | Remove      | Too low:    |
+| Filtering   | Frequency   | (zero-phase | hig         | attenuates  |
+|             | (Hz)        | filter)     | h-frequency | true fast   |
+|             |             |             | noise while | ACh         |
+|             |             |             | preserving  | signals.    |
+|             |             |             | GACh3.0     | Too high:   |
+|             |             |             | signal      | i           |
+|             |             |             | kinetics.   | nsufficient |
+|             |             |             | ^11^        | noise       |
+|             |             |             |             | removal.    |
+|             |             |             |             | Phase       |
+|             |             |             |             | distortion  |
+|             |             |             |             | if not      |
+|             |             |             |             | zero-phase. |
++-------------+-------------+-------------+-------------+-------------+
+| Isosbestic  | Regression  | OLS, IRLS   | IRLS is     | OLS: poor   |
+| Fitting     | Type        | (re         | robust to   | fit if      |
+| Method      |             | commended), | outliers    | large       |
+|             |             | TMAC        | (neural     | transients. |
+|             |             |             | signals in  | IRLS/TMAC:  |
+|             |             |             | signal      | better      |
+|             |             |             | channel).   | artifact    |
+|             |             |             | TMAC is     | isolation.  |
+|             |             |             | m           |             |
+|             |             |             | odel-based. |             |
+|             |             |             | ^11^        |             |
++-------------+-------------+-------------+-------------+-------------+
+| F0 Window   | Baseline    | Entire      | Fitted      | Incorrect   |
+| Selection   | Definition  | fitted      | isosbestic  | F0 skews    |
+| (for ΔF/F)  |             | isosbestic  | provides    | ΔF/F.       |
+|             |             | trace;      | dynamic     | Pre-event   |
+|             |             | Pre-event   | correction. | window must |
+|             |             | window      | Pre-event   | be truly    |
+|             |             | (e.g., 1-5s | localizes   | quiescent.  |
+|             |             | before      | baseline.   |             |
+|             |             | event)      | ^11^        |             |
++-------------+-------------+-------------+-------------+-------------+
+| No          | ΔF/F vs.    | ΔF/F        | ΔF/F        | Z-score:    |
+| rmalization | Z-score     | generally   | reflects    | misint      |
+| Method      |             | preferred.  | relative    | erpretation |
+|             |             | Z-score     | fl          | of signal   |
+|             |             | with        | uorescence. | magnitud    |
+|             |             | caution.    | Z-score     | e/frequency |
+|             |             |             | normalizes  | changes.    |
+|             |             |             | to          | ΔF/F:       |
+|             |             |             | variance,   | sensitive   |
+|             |             |             | can mask    | to F0 if    |
+|             |             |             | true        | poorly      |
+|             |             |             | effects,    | estimated.  |
+|             |             |             | especially  |             |
+|             |             |             | for         |             |
+|             |             |             | spontaneous |             |
+|             |             |             | signals.    |             |
+|             |             |             | ^17^        |             |
++-------------+-------------+-------------+-------------+-------------+
+| Detrending  | Method      | Moving      | Remove very | Moving      |
+| of          |             | Median      | slow        | Mean: may   |
+| Corrected   |             | (robust)    | residual    | attenuate   |
+| Signal (if  |             |             | drifts      | true        |
+| needed)     |             |             | after       | signals. No |
+|             |             |             | primary     | detrending: |
+|             |             |             | correction  | slow drifts |
+|             |             |             | without     | may         |
+|             |             |             | overfitting | confound    |
+|             |             |             | to phasic   | phasic      |
+|             |             |             | signals.    | analysis.   |
+|             |             |             | ^15^        |             |
++-------------+-------------+-------------+-------------+-------------+
+ 
+By adhering to these principles and recommendations, researchers
+utilizing GACh3.0 fiber photometry can enhance the rigor of their
+analyses, improve the reproducibility of their findings, and contribute
+more reliably to the understanding of acetylcholine\'s role in brain
+function and behavior.

@@ -1,0 +1,22 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+publish = false
+
+[workspace.dependencies]
+simplefp-core = { path = "crates/core" }
+simplefp-tdt = { path = "crates/tdt" }
+simplefp = { path = "crates/engine" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.9"
+rayon = "1.11"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
