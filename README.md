@@ -100,7 +100,21 @@ docs/           science spec, architecture, preset standard, roadmap, legacy aud
 legacy/         original MATLAB scripts and the 2025 AI research notes (reference only)
 ```
 
+Cohort manifests can also declare **window contrasts**: within-session state comparisons placed relative to events,
+tested across animals.
+
+```toml
+[[window_contrast]]
+name = "wake − iso"
+a = { event = "awake", from_s = 30.0, to_s = 150.0 }
+b = { event = "iso_off", from_s = -60.0, to_s = 0.0 }
+```
+
 ## Validation
+
+On real Synapse recordings (11 blocks), the TDT reader matches TDT's official Python reader (`tdt` on PyPI)
+sample-for-sample on every stream and epoc. CamHal camera AVIs are transcoded once on import, with the frame count
+verified.
 
 `cargo test --release` runs the following:
 - unit tests against SciPy golden values (Butterworth SOS design, `sosfiltfilt`);

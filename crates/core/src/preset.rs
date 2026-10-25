@@ -72,7 +72,13 @@ pub struct Preprocess {
 #[serde(tag = "method", rename_all = "snake_case", deny_unknown_fields)]
 pub enum BleachMethod {
     DoubleExp { robust: bool },
+    /// Robust straight line in time.
+    Linear,
     Highpass { cutoff_hz: f64 },
+    /// Constant F0 = median of a reference period (block-clock seconds), e.g. the
+    /// anesthetized baseline before a state change. Use when the session contains a
+    /// tonic change of interest that any detrending would remove (methods-spec §3.4).
+    Window { start_s: f64, end_s: f64 },
     None,
 }
 
@@ -157,6 +163,11 @@ impl Preset {
         if let BleachMethod::Highpass { cutoff_hz } = self.bleach {
             in_range("bleach.cutoff_hz", cutoff_hz, 1e-4, 0.1)?;
         }
+        if let BleachMethod::Window { start_s, end_s } = self.bleach
+            && !(start_s >= 0.0 && end_s - start_s >= 2.0)
+        {
+            return Err(format!("bleach window [{start_s}, {end_s}] s must start at ≥ 0 and span at least 2 s"));
+        }
         if let MotionMethod::Irls { tuning } | MotionMethod::FitRaw { tuning } = self.motion {
             in_range("motion.tuning", tuning, 1.0, 10.0)?;
         }
@@ -187,6 +198,11 @@ pub const BUILTIN: &[(&str, &str)] = &[
 fn merge(base: &mut toml::Table, over: toml::Table) {
     for (k, v) in over {
         match (base.get_mut(&k), v) {
+            // A tagged method table (`method = …`) switching method is replaced whole:
+            // the parent's method-specific keys would be invalid for the new method.
+            (Some(toml::Value::Table(b)), toml::Value::Table(o)) if o.get("method").is_some_and(|m| Some(m) != b.get("method")) => {
+                *b = o;
+            }
             (Some(toml::Value::Table(b)), toml::Value::Table(o)) => merge(b, o),
             (_, v) => {
                 base.insert(k, v);
@@ -247,6 +263,16 @@ mod tests {
         assert_eq!(p.id, "lab-feeding");
         assert_eq!(p.events.pre_s, 10.0);
         assert_eq!(p.sensor.name, builtin("grab-ach3.0-tdt").unwrap().sensor.name);
+    }
+
+    #[test]
+    fn switching_method_replaces_its_table() {
+        let src = "extends = \"grab-ach3.0-tdt\"\nid = \"w\"\nname = \"w\"\n[bleach]\nmethod = \"window\"\nstart_s = 30.0\nend_s = 230.0\n[motion]\nmethod = \"none\"\n";
+        let p = parse(src, &BTreeMap::new()).unwrap();
+        assert_eq!(p.bleach, BleachMethod::Window { start_s: 30.0, end_s: 230.0 });
+        // Same method: keys still merge (override one, inherit the rest).
+        let src = "extends = \"grab-ach3.0-tdt\"\nid = \"t\"\nname = \"t\"\n[motion]\nmethod = \"irls\"\ntuning = 3.0\n";
+        assert_eq!(parse(src, &BTreeMap::new()).unwrap().motion, MotionMethod::Irls { tuning: 3.0 });
     }
 
     #[test]

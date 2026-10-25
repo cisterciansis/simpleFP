@@ -110,7 +110,7 @@ fn run(cli: Cli) -> Result<(), String> {
             for c in &g.groups {
                 println!("  {:<10} {:<10} {:<10} n = {} animals", c.event, c.group, c.condition, c.n_animals);
             }
-            for t in g.metric_tests.iter().filter(|t| t.metric == "mean") {
+            for t in g.metric_tests.iter().filter(|t| t.metric == "mean" || t.metric == "window_mean") {
                 println!(
                     "  {:<10} {:<28} Δ mean = {:+.3} [{:+.3}, {:+.3}]  p = {:.4}{}  q = {:.4}  (n = {}/{})",
                     t.event, t.contrast, t.estimate, t.lo, t.hi, t.p, if t.exact { " exact" } else { "" }, t.q, t.n[0], t.n[1]

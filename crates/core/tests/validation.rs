@@ -80,3 +80,27 @@ fn fit_raw_alternative_is_worse_under_unequal_bleaching() {
     let r_def = stats::pearson(&hp(&def.dff[out.valid.clone()]), &hp(&truth[out.valid.clone()]));
     assert!(r > 0.7 && r_def > r + 0.1, "fit_raw {r} vs default {r_def}");
 }
+
+#[test]
+fn window_baseline_preserves_tonic_state_change() {
+    // A tonic +5 % step at 300 s (e.g. waking from anesthesia) on top of bleaching.
+    let mut s = sim::simulate(&sim::SimParams { n_events: 0, motion_per_min: 0.0, ..Default::default() });
+    let step_at = (300.0 * s.fs) as usize;
+    s.signal[step_at..].iter_mut().for_each(|v| *v *= 1.05);
+    let mut p = preset::builtin("grab-ach3.0-tdt").unwrap();
+    p.motion = preset::MotionMethod::None;
+    let late = |o: &pipeline::Output| stats::mean(&o.dff[(450.0 * o.fs) as usize..(590.0 * o.fs) as usize]);
+    let input = pipeline::Input { fs: s.fs, t0: 0.0, signal: &s.signal, control: Some(&s.control) };
+    p.bleach = preset::BleachMethod::Window { start_s: 200.0, end_s: 290.0 };
+    let w = late(&pipeline::run(&input, &p).unwrap());
+    p.bleach = preset::BleachMethod::Linear;
+    let l = late(&pipeline::run(&input, &p).unwrap());
+    // Truth: the step times the simulator's bleaching between the reference and late windows
+    // (window F0 does not correct bleaching after the reference period: conservative for increases).
+    let bs = |x: f64| 1.0 + 0.25 * (-x / 60.0).exp() + 0.15 * (-x / 900.0).exp();
+    let avg = |a: f64, b: f64| (0..100).map(|k| bs(a + (b - a) * k as f64 / 99.0)).sum::<f64>() / 100.0;
+    let truth = 100.0 * (1.05 * avg(450.0, 590.0) / avg(200.0, 290.0) - 1.0);
+    println!("late ΔF/F: window {w:.2} %, linear detrend {l:.2} %, truth {truth:.2} %");
+    assert!((w - truth).abs() < 0.2, "window {w} vs truth {truth}");
+    assert!(l.abs() < 0.5, "detrending should erase the step: {l}");
+}

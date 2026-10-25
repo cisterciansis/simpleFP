@@ -46,6 +46,41 @@ pub struct Manifest {
     pub sessions: Vec<SessionEntry>,
     #[serde(default, rename = "contrast")]
     pub contrasts: Vec<ContrastSpec>,
+    #[serde(default, rename = "window_contrast")]
+    pub window_contrasts: Vec<WindowContrast>,
+}
+
+/// A within-session state contrast: mean ΔF/F in window `a` minus window `b`, each
+/// placed relative to an event (e.g. 30–150 s after `awake` minus 60–0 s before
+/// `iso_off`). Both windows share the session's F0, so the difference is not
+/// affected by the choice of reference period; only bleaching between the two
+/// windows biases it. Tested across animals with a sign-flip permutation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WindowContrast {
+    pub name: String,
+    pub a: EventWindow,
+    pub b: EventWindow,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EventWindow {
+    pub event: String,
+    pub from_s: f64,
+    pub to_s: f64,
+}
+
+/// Per-animal value of a window contrast.
+#[derive(Debug, Clone, Serialize)]
+pub struct WindowValue {
+    pub contrast: String,
+    pub animal: String,
+    pub group: String,
+    pub condition: String,
+    pub a: f64,
+    pub b: f64,
+    pub diff: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -111,6 +146,13 @@ impl Manifest {
                 return Err(format!("session '{}' has no events (set `events` at the top or on the session)", s.block));
             }
         }
+        for w in &m.window_contrasts {
+            for x in [&w.a, &w.b] {
+                if !(x.from_s.is_finite() && x.to_s.is_finite() && x.to_s - x.from_s >= 1.0) {
+                    return Err(format!("window contrast '{}': window [{}, {}] s must be finite and at least 1 s long", w.name, x.from_s, x.to_s));
+                }
+            }
+        }
         Ok(m)
     }
 }
@@ -131,6 +173,7 @@ pub struct CohortRun {
     pub preset: Preset,
     pub reports: Vec<SessionReport>,
     pub group: GroupAnalysis,
+    pub window_values: Vec<WindowValue>,
     analyses: Vec<(usize, Recording, Analysis)>,
 }
 
@@ -226,7 +269,59 @@ pub fn run(manifest_path: &Path) -> Result<CohortRun, String> {
     for r in reports.iter().filter(|r| r.status.starts_with("failed")) {
         group.warnings.insert(0, format!("{}: {}", r.block, r.status));
     }
-    Ok(CohortRun { manifest, preset, reports, group, analyses })
+    let window_values = window_contrasts(&manifest, &analyses, &opts, &mut group);
+    Ok(CohortRun { manifest, preset, reports, group, window_values, analyses })
+}
+
+/// Mean ΔF/F over `[e + from, e + to]` averaged over every occurrence of the event in a session.
+fn window_mean(a: &Analysis, w: &EventWindow) -> Option<f64> {
+    let o = &a.output;
+    let times = a.event_times(&w.event)?;
+    let vals: Vec<f64> = times
+        .iter()
+        .filter_map(|&e| {
+            let (i0, i1) = (((e + w.from_s - o.t0) * o.fs).ceil(), ((e + w.to_s - o.t0) * o.fs).floor());
+            if i0 < 0.0 || i1 >= o.dff.len() as f64 || i1 < i0 {
+                return None;
+            }
+            let seg = &o.dff[i0 as usize..=i1 as usize];
+            // Any trimmed (NaN) sample means the window is not fully analyzed.
+            seg.iter().all(|v| v.is_finite()).then(|| seg.iter().sum::<f64>() / seg.len() as f64)
+        })
+        .collect();
+    (!vals.is_empty()).then(|| vals.iter().sum::<f64>() / vals.len() as f64)
+}
+
+fn window_contrasts(m: &Manifest, analyses: &[(usize, Recording, Analysis)], o: &GroupOpts, g: &mut GroupAnalysis) -> Vec<WindowValue> {
+    let mut out = vec![];
+    for wc in &m.window_contrasts {
+        // Average sessions within animal × group × condition first (animal = unit).
+        let mut per: std::collections::BTreeMap<(String, String, String), Vec<(f64, f64)>> = Default::default();
+        for (i, _, a) in analyses {
+            let s = &m.sessions[*i];
+            match (window_mean(a, &wc.a), window_mean(a, &wc.b)) {
+                (Some(x), Some(y)) => per.entry((s.animal.clone(), s.group.clone(), s.condition.clone())).or_default().push((x, y)),
+                _ => g.warnings.push(format!("{}: '{}' windows not fully inside the analyzed recording (or event missing); session skipped", s.block, wc.name)),
+            }
+        }
+        let mut cells: std::collections::BTreeMap<(String, String), Vec<f64>> = Default::default();
+        for ((animal, group, condition), v) in per {
+            let (a, b) = (v.iter().map(|p| p.0).sum::<f64>() / v.len() as f64, v.iter().map(|p| p.1).sum::<f64>() / v.len() as f64);
+            cells.entry((group.clone(), condition.clone())).or_default().push(a - b);
+            out.push(WindowValue { contrast: wc.name.clone(), animal, group, condition, a, b, diff: a - b });
+        }
+        for ((group, condition), d) in cells {
+            if d.len() < group::MIN_ANIMALS {
+                g.warnings.push(format!("{} · {group} · {condition}: {} animal(s) < {}; no test", wc.name, d.len(), group::MIN_ANIMALS));
+                continue;
+            }
+            g.metric_tests.push(group::paired_test(&format!("{} − {}", wc.a.event, wc.b.event), &format!("{} ({group} · {condition})", wc.name), "window_mean", &d, o));
+        }
+    }
+    // Recompute BH across all tests now that window contrasts joined the family.
+    let q = group::bh(&g.metric_tests.iter().map(|t| t.p).collect::<Vec<_>>());
+    g.metric_tests.iter_mut().zip(q).for_each(|(t, q)| t.q = q);
+    out
 }
 
 fn num(v: f64) -> String {
@@ -293,6 +388,14 @@ pub fn export_cohort(run: &CohortRun, out: &Path) -> Result<Vec<PathBuf>, String
         let _ = writeln!(s, "{},{},{},{},{},{},{},{},{},{},{}", q(&m.event), q(&m.contrast), m.metric, m.n[0], m.n[1], num(m.estimate), num(m.lo), num(m.hi), m.p, m.exact as u8, m.q);
     }
     put("metric_tests.csv", s)?;
+
+    if !run.window_values.is_empty() {
+        let mut s = String::from("contrast,animal,group,condition,window_a_mean,window_b_mean,diff\n");
+        for w in &run.window_values {
+            let _ = writeln!(s, "{},{},{},{},{},{},{}", q(&w.contrast), q(&w.animal), q(&w.group), q(&w.condition), num(w.a), num(w.b), num(w.diff));
+        }
+        put("window_contrasts.csv", s)?;
+    }
 
     // Trial-level long format with the nesting columns fastFMM needs: fui(dff ~ group + (1 | animal/session)).
     let mut s = String::from("animal,group,condition,session,event,trial,event_time_s,t,dff_baseline_sub\n");

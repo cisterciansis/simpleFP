@@ -196,10 +196,10 @@ private struct RecordingView: View {
                 }
             }
             .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 10)
-            .frame(minHeight: 280)
+            .frame(maxWidth: .infinity, minHeight: 280, maxHeight: .infinity)
 
             EventPanel(rec: rec)
-                .frame(minHeight: 220)
+                .frame(maxWidth: .infinity, minHeight: 220, maxHeight: .infinity)
         }
         .task(id: rec.id) { await rec.loadVideo() }
         .onDisappear { rec.video?.player.pause() }

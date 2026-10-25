@@ -83,15 +83,22 @@ fn condition(x: &[f64], p: &Preset, fs: f64) -> Vec<f64> {
     }
 }
 
-/// Slow component removed by a zero-phase 0.001 Hz high-pass (Akam & Burgeno 2023).
-fn highpass_baseline(y: &[f64], cutoff_hz: f64, fs: f64) -> Vec<f64> {
-    let hp = dsp::sosfiltfilt(&dsp::butter(2, cutoff_hz, fs, Band::High), y);
-    y.iter().zip(hp).map(|(a, b)| a - b).collect()
+/// Hold a baseline computed on `range` constant outside it (trimmed edges never shape the fit).
+fn extend(range: &Range<usize>, n: usize, inner: Vec<f64>) -> Vec<f64> {
+    let (first, last) = (inner[0], inner[inner.len() - 1]);
+    (0..n).map(|i| if i < range.start { first } else if i >= range.end { last } else { inner[i - range.start] }).collect()
 }
 
-/// Fit the bleaching baseline on `range`, evaluate it over the whole trace.
+/// Robust (bisquare) straight line in time: the fallback when the decay model does not fit.
+fn linear_baseline(y: &[f64], t: &[f64], range: &Range<usize>) -> Vec<f64> {
+    let f = fit::robust_line(&t[range.clone()], &y[range.clone()], 4.685, 50);
+    t.iter().map(|&ti| f.slope * ti + f.intercept).collect()
+}
+
+/// Fit the bleaching baseline on `range` (never the trimmed edges), evaluate over the whole trace.
 /// Returns `(baseline, used_fallback)`.
 fn bleach(y: &[f64], t: &[f64], range: &Range<usize>, m: &BleachMethod, fs: f64) -> (Vec<f64>, bool) {
+    let n = y.len();
     match m {
         BleachMethod::DoubleExp { robust } => {
             let f = fit::fit_biexp(&t[range.clone()], &y[range.clone()], *robust);
@@ -99,10 +106,19 @@ fn bleach(y: &[f64], t: &[f64], range: &Range<usize>, m: &BleachMethod, fs: f64)
             let span = t[range.end - 1] - t[range.start];
             // Implausible fits: non-finite, non-positive, or a "slow" constant far beyond any session.
             let ok = base[range.clone()].iter().all(|b| b.is_finite() && *b > 0.0) && f.tau1 > 0.1 && f.tau2 < 1e3 * span.max(1.0);
-            if ok { (base, false) } else { (highpass_baseline(y, 0.001, fs), true) }
+            if ok { (base, false) } else { (linear_baseline(y, t, range), true) }
         }
-        BleachMethod::Highpass { cutoff_hz } => (highpass_baseline(y, *cutoff_hz, fs), false),
-        BleachMethod::None => (vec![stats::mean(&y[range.clone()]); y.len()], false),
+        BleachMethod::Linear => (linear_baseline(y, t, range), false),
+        BleachMethod::Highpass { cutoff_hz } => {
+            let v = &y[range.clone()];
+            let hp = dsp::sosfiltfilt_pad(&dsp::butter(2, *cutoff_hz, fs, Band::High), v, (3.0 * fs / cutoff_hz) as usize);
+            (extend(range, n, v.iter().zip(hp).map(|(a, b)| a - b).collect()), false)
+        }
+        BleachMethod::Window { start_s, end_s } => {
+            let w: Vec<f64> = (range.clone()).filter(|&i| t[i] >= *start_s && t[i] <= *end_s).map(|i| y[i]).collect();
+            (vec![if w.is_empty() { f64::NAN } else { stats::median(&w) }; n], false)
+        }
+        BleachMethod::None => (vec![stats::mean(&y[range.clone()]); n], false),
     }
 }
 
@@ -142,6 +158,11 @@ pub fn run(input: &Input, p: &Preset) -> Result<Output, String> {
     let mut warnings = vec![];
 
     let (sig_base, sig_fb) = bleach(&sig, &t, &valid, &p.bleach, fs);
+    if let BleachMethod::Window { start_s, end_s } = p.bleach
+        && sig_base[0].is_nan()
+    {
+        return Err(format!("bleach window [{start_s}, {end_s}] s contains no analyzed samples"));
+    }
     if sig_base[valid.clone()].iter().any(|&b| b <= 0.0) {
         return Err("signal baseline is not positive; is the stream dark or background-subtracted?".into());
     }
@@ -149,7 +170,7 @@ pub fn run(input: &Input, p: &Preset) -> Result<Output, String> {
     let ctl_fit = ctl.as_ref().map(|c| bleach(c, &t, &valid, &p.bleach, fs));
     let fallback = sig_fb || ctl_fit.as_ref().is_some_and(|f| f.1);
     if fallback {
-        warnings.push("double-exponential bleaching fit implausible; used 0.001 Hz high-pass baseline instead".into());
+        warnings.push("double-exponential bleaching fit implausible (the trend is not a monotonic decay); used a robust linear trend instead. If the session contains a state change, use bleach.method = \"window\"".into());
     }
     let ctl_base = ctl_fit.map(|f| f.0);
     let ctl_det: Option<Vec<f64>> = ctl.as_ref().zip(ctl_base.as_ref()).map(|(c, b)| c.iter().zip(b).map(|(a, b)| a - b).collect());

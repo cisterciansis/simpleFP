@@ -126,12 +126,19 @@ fn sosfilt(sos: &[Section], zi: &[[f64; 2]], x: &mut [f64]) {
 /// Zero-phase filtering (scipy `sosfiltfilt`, `padtype="odd"`, default padlen).
 /// Inputs shorter than the pad length are filtered with the longest pad that fits.
 pub fn sosfiltfilt(sos: &[Section], x: &[f64]) -> Vec<f64> {
+    let trivial = sos.iter().filter(|s| s[2] == 0.0).count().min(sos.iter().filter(|s| s[5] == 0.0).count());
+    sosfiltfilt_pad(sos, x, 3 * (2 * sos.len() + 1 - trivial))
+}
+
+/// [`sosfiltfilt`] with an explicit odd-extension length (clamped to `len − 1`).
+/// Very low cutoffs need padding comparable to the filter's time constant, far
+/// beyond scipy's default, or edge transients dominate the output.
+pub fn sosfiltfilt_pad(sos: &[Section], x: &[f64], pad: usize) -> Vec<f64> {
     let n = x.len();
     if n < 2 {
         return x.to_vec();
     }
-    let trivial = sos.iter().filter(|s| s[2] == 0.0).count().min(sos.iter().filter(|s| s[5] == 0.0).count());
-    let pad = (3 * (2 * sos.len() + 1 - trivial)).min(n - 1);
+    let pad = pad.min(n - 1);
     let (a, b) = (x[0], x[n - 1]);
     let mut ext = Vec::with_capacity(n + 2 * pad);
     ext.extend((1..=pad).rev().map(|i| 2.0 * a - x[i]));

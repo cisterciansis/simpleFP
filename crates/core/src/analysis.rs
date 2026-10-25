@@ -28,6 +28,16 @@ pub struct Analysis {
     pub events: Vec<EventResult>,
 }
 
+impl Analysis {
+    /// All event times of a label, including events too close to the edges to epoch.
+    pub fn event_times(&self, label: &str) -> Option<Vec<f64>> {
+        let e = self.events.iter().find(|e| e.label == label)?;
+        let mut v: Vec<f64> = e.epochs.event_times.iter().chain(&e.epochs.dropped).copied().collect();
+        v.sort_by(f64::total_cmp);
+        Some(v)
+    }
+}
+
 /// Minimum trials for a bootstrap CI (the √(n/(n−1)) expansion is unstable below this).
 pub const MIN_TRIALS_FOR_CI: usize = 3;
 

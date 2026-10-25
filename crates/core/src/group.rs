@@ -11,7 +11,8 @@
 //!   bootstrap variance matches the unbiased two-sample variance.
 //! - Scalar metrics: per-animal means; hierarchical bootstrap CIs (Saravanan et
 //!   al. 2020); exact or Monte-Carlo permutation tests (label shuffle between
-//!   groups, sign flips within subjects); Benjamini–Hochberg q across all tests.
+//!   groups, sign flips within subjects and for each cell against 0);
+//!   Benjamini–Hochberg q across all tests.
 
 use crate::events::{self, MeanCi, Metrics, min_consecutive};
 use crate::stats::{self, Rng};
@@ -302,6 +303,15 @@ fn perm_paired(d: &[f64], seed: u64) -> (f64, bool) {
     }
 }
 
+/// Paired one-sample inference on per-animal values (e.g. window differences):
+/// exact/MC sign-flip permutation p and percentile bootstrap CI of the mean.
+pub fn paired_test(event: &str, contrast: &str, metric: &str, values: &[f64], o: &GroupOpts) -> MetricTest {
+    let s = salt(&format!("{event}{contrast}{metric}"));
+    let (p, exact) = perm_paired(values, o.seed ^ s);
+    let (lo, hi) = boot_mean_diff(values, None, o, s);
+    MetricTest { event: event.into(), contrast: contrast.into(), metric: metric.into(), n: [values.len(), values.len()], estimate: stats::mean(values), lo, hi, p, exact, q: f64::NAN }
+}
+
 /// Benjamini–Hochberg adjusted p-values (step-up, monotone).
 pub fn bh(p: &[f64]) -> Vec<f64> {
     let n = p.len();
@@ -418,6 +428,7 @@ pub fn analyze(sessions: &[SessionEvent], contrasts: &[ContrastSpec], o: &GroupO
     }
     let mut groups = vec![];
     let mut metric_summaries = vec![];
+    let mut tests = vec![];
     for ((event, group, condition), idx) in &by_cell {
         let rows: Vec<Vec<f64>> = idx.iter().map(|&i| animals[i].mean.clone()).collect();
         let refs: Vec<&[f64]> = rows.iter().map(Vec::as_slice).collect();
@@ -438,6 +449,12 @@ pub fn analyze(sessions: &[SessionEvent], contrasts: &[ContrastSpec], o: &GroupO
             let means: Vec<f64> = trials.iter().map(|v| stats::mean(v)).collect();
             let (lo, hi) = if n >= MIN_ANIMALS { hier_boot(&trials, o, salt(&format!("{event}{group}{condition}{name}"))) } else { (f64::NAN, f64::NAN) };
             metric_summaries.push(MetricSummary { event: event.clone(), group: group.clone(), condition: condition.clone(), metric: name.into(), n_animals: n, mean: stats::mean(&means), lo, hi });
+            // One-sample test: is the per-animal response different from 0 (the baseline)?
+            if n >= MIN_ANIMALS {
+                let s = salt(&format!("{event}{group}{condition}{name}vs0"));
+                let (p, exact) = perm_paired(&means, o.seed ^ s);
+                tests.push(MetricTest { event: event.clone(), contrast: format!("{group} · {condition} vs 0"), metric: name.into(), n: [n, n], estimate: stats::mean(&means), lo, hi, p, exact, q: f64::NAN });
+            }
         }
     }
 
@@ -445,7 +462,6 @@ pub fn analyze(sessions: &[SessionEvent], contrasts: &[ContrastSpec], o: &GroupO
     let event_names: Vec<String> = by_cell.keys().map(|k| k.0.clone()).collect::<std::collections::BTreeSet<_>>().into_iter().collect();
     let specs: Vec<ContrastSpec> = if contrasts.is_empty() { default_contrasts(&animals) } else { contrasts.to_vec() };
     let mut curves = vec![];
-    let mut tests = vec![];
     for event in &event_names {
         for spec in &specs {
             let pick = |g: &str, c: &str| -> Vec<&AnimalCurve> { animals.iter().filter(|a| &a.event == event && a.group == g && a.condition == c).collect() };

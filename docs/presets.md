@@ -6,7 +6,8 @@ BLAKE3 hash, both in `run.json`), and an AI agent edits. Built-ins live in `pres
 ## Rules
 
 - **Strict:** unknown keys are errors (`pre_sec` instead of `pre_s` fails loudly), and so are out-of-range values.
-- **Inheritance:** `extends = "<id>"` deep-merges the parent's tables, so a child states only what differs. Parents
+- **Inheritance:** `extends = "<id>"` deep-merges the parent's tables, so a child states only what differs. A method
+  table that switches `method` (e.g. `[bleach] method = "window"`) replaces the parent's table whole. Parents
   are resolved from the built-ins and from `.toml` files in the same directory (the file stem is the id). Cycles are
   rejected.
 - **Units are in the key name:** `_s` seconds, `_hz` hertz, `_nm` nanometres. Percent values are plain numbers.
@@ -29,7 +30,7 @@ BLAKE3 hash, both in `run.json`), and an AI agent edits. Built-ins live in `pres
 | `[preprocess] lowpass_hz` | Hz or omitted | Zero-phase Butterworth; omit to disable | < target_fs/2 |
 | `[preprocess] lowpass_order` | int | Filter order (applied twice by filtfilt) | 1–8 |
 | `[preprocess] target_fs` | Hz | Decimate by `floor(fs/target_fs)` with block means | 1–1000 |
-| `[bleach] method` | `"double_exp"` (`robust`), `"highpass"` (`cutoff_hz`), `"none"` | Per-channel bleaching model | cutoff 1e-4–0.1 |
+| `[bleach] method` | `"double_exp"` (`robust`), `"linear"`, `"highpass"` (`cutoff_hz`), `"window"` (`start_s`, `end_s`), `"none"` | Per-channel bleaching model. `window` sets F0 to the median over a reference period, for sessions with a tonic state change that detrending would erase. It is conservative for increases, because bleaching after the window is not corrected. | cutoff 1e-4–0.1; window ≥ 2 s |
 | `[motion] method` | `"irls"` (`tuning`), `"ols"`, `"fit_raw"` (`tuning`), `"none"` | Control→signal artifact regression | tuning 1–10 |
 | `[output] robust_z` | bool | Session z uses median/MAD instead of mean/SD | — |
 | `[events] pre_s, post_s` | s | Epoch extent | 0–600 |

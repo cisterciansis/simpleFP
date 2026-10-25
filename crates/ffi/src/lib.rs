@@ -542,6 +542,7 @@ pub fn write_cohort_manifest(path: String, name: String, preset_id: String, epoc
             .map(|s| simplefp::cohort::SessionEntry { block: s.block, animal: s.animal, group: s.group, condition: s.condition, events: None, exclude: false, exclude_reason: None })
             .collect(),
         contrasts: vec![],
+        window_contrasts: vec![],
     };
     let src = toml::to_string_pretty(&manifest).map_err(|e| FpError::from(e.to_string()))?;
     simplefp::cohort::Manifest::parse(&src)?;

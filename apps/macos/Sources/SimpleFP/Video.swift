@@ -46,6 +46,61 @@ struct FrameTable: Sendable {
     }
 }
 
+// MARK: - Import (CamHal AVI → cached MP4)
+
+/// Synapse's CamHal records DivX AVI, which AVFoundation cannot decode. Transcode
+/// once into a cache (never next to the raw data) with every frame kept and no
+/// B-frames, then verify the frame count matches the original exactly.
+enum VideoImport {
+    nonisolated static func tool(_ name: String) -> String? {
+        ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"].map { "\($0)/\(name)" }.first { FileManager.default.isExecutableFile(atPath: $0) }
+    }
+
+    nonisolated static func run(_ exe: String, _ args: [String]) throws -> String {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: exe)
+        p.arguments = args
+        let out = Pipe()
+        p.standardOutput = out
+        p.standardError = Pipe()
+        try p.run()
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        guard p.terminationStatus == 0 else { throw NSError(domain: "SimpleFP", code: Int(p.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "\((exe as NSString).lastPathComponent) failed (\(p.terminationStatus))"]) }
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    nonisolated static func frames(_ ffprobe: String, _ url: URL) throws -> Int {
+        let s = try run(ffprobe, ["-v", "error", "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", url.path])
+        guard let n = Int(s.trimmingCharacters(in: .whitespacesAndNewlines)) else { throw NSError(domain: "SimpleFP", code: 5, userInfo: [NSLocalizedDescriptionKey: "could not count frames in \(url.lastPathComponent)"]) }
+        return n
+    }
+
+    /// A URL AVFoundation can play frame-accurately.
+    nonisolated static func playable(_ url: URL) async throws -> URL {
+        guard url.pathExtension.lowercased() == "avi" else { return url }
+        let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+        let key = "\(url.path)|\((attrs[.size] as? Int) ?? 0)|\((attrs[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0)"
+        let name = String(key.utf8.reduce(UInt64(0xcbf2_9ce4_8422_2325)) { ($0 ^ UInt64($1)) &* 0x100_0000_01b3 }, radix: 16)
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("SimpleFP/video", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let out = dir.appendingPathComponent("\(name).mp4")
+        if FileManager.default.fileExists(atPath: out.path) { return out }
+        guard let ffmpeg = tool("ffmpeg"), let ffprobe = tool("ffprobe") else {
+            throw NSError(domain: "SimpleFP", code: 6, userInfo: [NSLocalizedDescriptionKey: "This block's camera video is a CamHal AVI (DivX), which macOS cannot play. Install ffmpeg (brew install ffmpeg) and reopen the block."])
+        }
+        let tmp = dir.appendingPathComponent("\(name).partial.mp4")
+        _ = try run(ffmpeg, ["-v", "error", "-y", "-i", url.path, "-map", "0:v:0", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-g", "10", "-bf", "0", "-fps_mode", "passthrough", "-an", "-movflags", "+faststart", tmp.path])
+        let (a, b) = (try frames(ffprobe, url), try frames(ffprobe, tmp))
+        guard a == b else {
+            try? FileManager.default.removeItem(at: tmp)
+            throw NSError(domain: "SimpleFP", code: 7, userInfo: [NSLocalizedDescriptionKey: "Transcoding changed the frame count (\(a) → \(b)); refusing to use it."])
+        }
+        try FileManager.default.moveItem(at: tmp, to: out)
+        return out
+    }
+}
+
 // MARK: - Model
 
 @MainActor @Observable
@@ -74,7 +129,7 @@ final class VideoModel {
         self.rec = rec
         camera = file.camera
         url = URL(fileURLWithPath: file.path)
-        player = AVPlayer(url: url)
+        player = AVPlayer()
         self.scorer = scorer
         ethogram = (try? JSONDecoder().decode(Ethogram.self, from: Data(defaultEthogram().utf8))) ?? Ethogram(name: "", behavior: [])
     }
@@ -85,7 +140,12 @@ final class VideoModel {
             let clock = try rec.session.frameClock(camera: camera)
             frameTimes = clock.times.withUnsafeBytes { Array($0.bindMemory(to: Double.self)) }
             clockHash = clock.hash
-            let t = try await FrameTable.load(url)
+            if url.pathExtension.lowercased() == "avi" { warning = "Preparing CamHal AVI for playback (one-time transcode)…" }
+            let source = url
+            let playable = try await Task.detached { try await VideoImport.playable(source) }.value
+            warning = nil
+            player.replaceCurrentItem(with: AVPlayerItem(url: playable))
+            let t = try await FrameTable.load(playable)
             table = t
             warning = try rec.session.checkVideoFrames(camera: camera, videoFrames: UInt64(t.movieTimes.count))
             if let saved = try rec.session.loadAnnotations(scorer: scorer), let set = try? JSONDecoder().decode(AnnotationSetJSON.self, from: Data(saved.utf8)) {

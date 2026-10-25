@@ -476,6 +476,24 @@ mod tests {
     }
 
     #[test]
+    fn window_contrast_detects_evoked_rise() {
+        let dir = std::env::temp_dir().join(format!("simplefp-wc-{}", std::process::id()));
+        let mut m = String::from("schema = 1\nname = \"wc\"\npreset = \"grab-ach3.0-tdt\"\nevents = [{ epoc = \"Evt_\" }]\n");
+        for k in 0..3 {
+            write_demo_block(&dir.join(format!("A{k}")), 20 + k).unwrap();
+            m += &format!("[[session]]\nblock = \"A{k}\"\nanimal = \"A{k}\"\n");
+        }
+        m += "[[window_contrast]]\nname = \"response\"\na = { event = \"Evt_\", from_s = 0.2, to_s = 1.5 }\nb = { event = \"Evt_\", from_s = -5.0, to_s = -1.0 }\n";
+        fs::write(dir.join("c.toml"), m).unwrap();
+        let run = cohort::run(&dir.join("c.toml")).unwrap();
+        assert_eq!(run.window_values.len(), 3);
+        assert!(run.window_values.iter().all(|w| w.diff > 1.0), "{:?}", run.window_values);
+        let t = run.group.metric_tests.iter().find(|t| t.metric == "window_mean").unwrap();
+        assert!(t.exact && (t.p - 0.25).abs() < 1e-12, "3 animals, all positive: exact sign-flip p = 2/8: {t:?}");
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
     fn camera_clock_and_annotation_roundtrip() {
         let dir = std::env::temp_dir().join(format!("simplefp-cam-{}", std::process::id()));
         write_demo_block(&dir, 5).unwrap();
