@@ -12,6 +12,9 @@ crate-type = ["staticlib", "lib"]
 [dependencies]
 simplefp.workspace = true
 toml.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+simplefp-lab.workspace = true
 uniffi = { version = "0.32.2", features = ["cli"] }
 
 [[bin]]

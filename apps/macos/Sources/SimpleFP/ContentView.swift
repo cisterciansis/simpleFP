@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(Library.self) private var library
+    @Environment(LabModel.self) private var lab
     @State private var showInspector = false
     @State private var columns: NavigationSplitViewVisibility = .automatic
     @State private var dropTargeted = false
@@ -17,6 +18,12 @@ struct ContentView: View {
                     RecordingView(rec: rec)
                 } else if let doc = library.selectedCohort {
                     CohortView(doc: doc)
+                } else if library.selection == LabModel.animalsID {
+                    AnimalsView()
+                } else if library.selection == LabModel.cagesID {
+                    CagesView()
+                } else if library.selection == LabModel.tasksID {
+                    TasksView()
                 } else {
                     EmptyState()
                 }
@@ -50,9 +57,11 @@ struct ContentView: View {
             }
         }
         .task {
+            lab.open()
             // `SimpleFP <block>…` or `SimpleFP --demo` (e.g. via `open -a SimpleFP --args …`).
             for arg in CommandLine.arguments.dropFirst() {
-                if arg == "--demo" { await library.openDemo() } else if arg == "--demo-cohort" { await library.openDemoCohort() } else if FileManager.default.fileExists(atPath: arg) { await library.open(URL(fileURLWithPath: arg)) }
+                if arg == "--seed-demo-lab", lab.animals.isEmpty { lab.seedDemo() }
+                if arg == "--lab" { library.selection = LabModel.cagesID } else if arg == "--animals" { library.selection = LabModel.animalsID } else if arg == "--tasks" { library.selection = LabModel.tasksID } else if arg == "--demo" { await library.openDemo() } else if arg == "--demo-cohort" { await library.openDemoCohort() } else if FileManager.default.fileExists(atPath: arg) { await library.open(URL(fileURLWithPath: arg)) }
             }
         }
         .sheet(isPresented: $library.showNewCohort) { NewCohortSheet() }
@@ -66,10 +75,17 @@ struct ContentView: View {
 
 private struct Sidebar: View {
     @Environment(Library.self) private var library
+    @Environment(LabModel.self) private var lab
 
     var body: some View {
         @Bindable var library = library
         List(selection: $library.selection) {
+            Section("Lab") {
+                Label("Animals", systemImage: "pawprint").tag(LabModel.animalsID)
+                Label("Cages", systemImage: "square.grid.2x2").tag(LabModel.cagesID)
+                Label("Tasks", systemImage: "checklist").tag(LabModel.tasksID)
+                    .badge(lab.tasks.filter { $0.overdue || $0.dueOn <= String(Date().formatted(.iso8601.year().month().day())) }.count)
+            }
             if !library.cohorts.isEmpty {
                 Section("Cohorts") {
                     ForEach(library.cohorts) { doc in
@@ -133,9 +149,7 @@ private struct Sidebar: View {
             .padding(10)
         }
         .overlay {
-            if library.recordings.isEmpty && library.cohorts.isEmpty {
-                Text("No recordings").foregroundStyle(.tertiary)
-            }
+            EmptyView()
         }
     }
 }

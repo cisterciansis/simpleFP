@@ -452,6 +452,176 @@ pub fn write_cohort_manifest(path: String, name: String, preset_id: String, epoc
     Ok(src)
 }
 
+// MARK: lab store (JSON at the boundary: rows are objects keyed by column name)
+
+#[derive(uniffi::Object)]
+pub struct LabStore {
+    lab: Mutex<simplefp_lab::Lab>,
+}
+
+fn obj(json: &str) -> R<serde_json::Map<String, serde_json::Value>> {
+    match serde_json::from_str(json) {
+        Ok(serde_json::Value::Object(m)) => Ok(m),
+        _ => Err(FpError::from("expected a JSON object".to_string())),
+    }
+}
+
+fn to_json<T: serde::Serialize>(v: &T) -> String {
+    serde_json::to_string(v).unwrap_or_else(|_| "null".into())
+}
+
+#[uniffi::export]
+impl LabStore {
+    /// Open or create a lab store. `actor` (user initials) is written to every audit row.
+    #[uniffi::constructor]
+    pub fn open(path: String, actor: String) -> R<Self> {
+        Ok(LabStore { lab: Mutex::new(simplefp_lab::Lab::open(Path::new(&path), &actor)?) })
+    }
+
+    pub fn list(&self, table: String, filter_column: Option<String>, filter_value: Option<String>) -> R<String> {
+        let lab = self.lab.lock().unwrap();
+        let filter = filter_column.as_deref().zip(filter_value.as_deref());
+        Ok(to_json(&lab.list(&table, filter)?))
+    }
+
+    pub fn insert(&self, table: String, json: String) -> R<String> {
+        Ok(self.lab.lock().unwrap().insert(&table, obj(&json)?)?)
+    }
+
+    pub fn update(&self, table: String, id: String, json: String, reason: Option<String>) -> R<()> {
+        Ok(self.lab.lock().unwrap().update(&table, &id, obj(&json)?, reason.as_deref())?)
+    }
+
+    /// Returns warnings (capacity, sex mixing); errors block the move.
+    pub fn move_animal(&self, animal_id: String, cage_id: String, reason: Option<String>) -> R<Vec<String>> {
+        Ok(self.lab.lock().unwrap().move_animal(&animal_id, &cage_id, reason.as_deref())?)
+    }
+
+    /// `pups_json`: `[{"label","sex","ear_tag"?,"cage_id"}]`. Returns the new animal ids.
+    pub fn wean(&self, litter_id: String, weaned_on: String, pups_json: String) -> R<Vec<String>> {
+        let pups: Vec<simplefp_lab::Pup> = serde_json::from_str(&pups_json).map_err(|e| FpError::from(e.to_string()))?;
+        Ok(self.lab.lock().unwrap().wean(&litter_id, &weaned_on, &pups)?)
+    }
+
+    /// `json`: `{"procedure":{…},"frame":{…},"injections":[…],"implants":[…]}`.
+    pub fn record_surgery(&self, json: String) -> R<String> {
+        let s: simplefp_lab::Surgery = serde_json::from_str(&json).map_err(|e| FpError::from(e.to_string()))?;
+        Ok(self.lab.lock().unwrap().record_surgery(s)?)
+    }
+
+    pub fn exclude(&self, scope: String, target_id: String, cohort_id: Option<String>, reason: String, detail: Option<String>) -> R<String> {
+        Ok(self.lab.lock().unwrap().exclude(&scope, &target_id, cohort_id.as_deref(), &reason, detail.as_deref())?)
+    }
+
+    pub fn add_cohort_member(&self, cohort_id: String, animal_id: String, group: String, allocation: String, blind_code: Option<String>) -> R<()> {
+        Ok(self.lab.lock().unwrap().add_cohort_member(&cohort_id, &animal_id, &group, &allocation, blind_code.as_deref())?)
+    }
+
+    pub fn add_cohort_session(&self, cohort_id: String, session_id: String, condition: String) -> R<()> {
+        Ok(self.lab.lock().unwrap().add_cohort_session(&cohort_id, &session_id, &condition)?)
+    }
+
+    pub fn freeze_cohort(&self, cohort_id: String) -> R<String> {
+        Ok(self.lab.lock().unwrap().freeze_cohort(&cohort_id)?)
+    }
+
+    pub fn unblind(&self, cohort_id: String, reason: String) -> R<()> {
+        Ok(self.lab.lock().unwrap().unblind(&cohort_id, &reason)?)
+    }
+
+    /// Write the cohort as an analysis manifest (`cohort.toml`) and return its path.
+    pub fn write_cohort_manifest(&self, cohort_id: String, data_root: String, path: String) -> R<String> {
+        let src = self.lab.lock().unwrap().cohort_manifest(&cohort_id, Path::new(&data_root))?;
+        simplefp::cohort::Manifest::parse(&src)?;
+        std::fs::write(&path, src).map_err(|e| FpError::from(format!("{path}: {e}")))?;
+        Ok(path)
+    }
+
+    pub fn tasks(&self, today: String, wean_age_days: i64) -> R<String> {
+        Ok(to_json(&self.lab.lock().unwrap().tasks(&today, wean_age_days)?))
+    }
+
+    pub fn timeline(&self, animal_id: String) -> R<String> {
+        Ok(to_json(&self.lab.lock().unwrap().timeline(&animal_id)?))
+    }
+
+    /// Register a TDT block as a session of `animal_id` (identity from the TSQ index, channels from the preset).
+    pub fn intake_session(&self, block_path: String, data_root: Option<String>, preset_id: String, animal_id: String, paradigm: String, condition: Option<String>) -> R<String> {
+        let preset = simplefp::load_preset(&preset_id, Path::new("."))?;
+        let mut f = simplefp::session_fields(Path::new(&block_path), data_root.as_deref().map(Path::new), &preset)?;
+        f.insert("animal_id".into(), animal_id.into());
+        f.insert("paradigm".into(), paradigm.into());
+        f.insert("condition".into(), condition.map_or(serde_json::Value::Null, Into::into));
+        Ok(self.lab.lock().unwrap().insert("session", f)?)
+    }
+
+    /// Seed a realistic demo colony whose animals own the demo-cohort recordings in `dir`.
+    pub fn seed_demo(&self, dir: String, today: String) -> R<()> {
+        use serde_json::json;
+        let manifest = simplefp::write_demo_cohort(Path::new(&dir))?;
+        let m = simplefp::cohort::Manifest::parse(&std::fs::read_to_string(&manifest).map_err(|e| FpError::from(e.to_string()))?)?;
+        let preset = simplefp::load_preset(&m.preset, Path::new("."))?;
+        let mut lab = self.lab.lock().unwrap();
+        let o = |v: serde_json::Value| v.as_object().cloned().unwrap_or_default();
+        let t = simplefp_lab::days(&today).ok_or_else(|| FpError::from("today must be YYYY-MM-DD".to_string()))?;
+        let d = |off: i64| simplefp_lab::date(t + off);
+        let proto = lab.insert("protocol", o(json!({"number": "DEMO-2026-01", "title": "Cholinergic signalling in feeding (demo)", "approved_from": d(-300), "expires_on": d(20), "species": "Mus musculus", "approved_count": 120})))?;
+        let chat = lab.insert("line", o(json!({"name": "ChAT-Cre", "official_symbol": "Chat<tm2(cre)Lowl>", "background": "C57BL/6J", "source": "JAX 006410"})))?;
+        let wt = lab.insert("line", o(json!({"name": "C57BL/6J", "background": "C57BL/6J", "source": "JAX 000664"})))?;
+        let virus = lab.insert("virus_lot", o(json!({"construct": "AAV9-hSyn-GRAB-ACh3.0", "serotype": "AAV9", "titer_vg_per_ml": 2.1e13, "source": "WZ Biosciences", "lot": "DEMO-17"})))?;
+        let cage = |lab: &mut simplefp_lab::Lab, label: &str, kind: &str, pos: i64| lab.insert("cage", o(json!({"label": label, "kind": kind, "room": "B214", "rack": "R1", "position": pos, "protocol_id": proto, "opened_on": d(-120)})));
+        let mut cages = std::collections::BTreeMap::new();
+        for (i, (label, kind)) in [("E-01", "experimental"), ("E-02", "experimental"), ("E-03", "experimental"), ("E-04", "experimental"), ("B-01", "breeding"), ("H-01", "holding"), ("H-02", "holding")].iter().enumerate() {
+            cages.insert(*label, cage(&mut lab, label, kind, i as i64 + 1)?);
+        }
+        let cohort = lab.insert("cohort", o(json!({"name": "Demo · refeed", "question": "Does ChAT-Cre cholinergic tone at food contact exceed WT, and does fasting raise it?", "preset": m.preset, "events": "[\"Evt_\"]", "blinding": "none", "created_by": "demo"})))?;
+        let mut animals = std::collections::BTreeMap::new();
+        for s in &m.sessions {
+            if !animals.contains_key(&s.animal) {
+                let line = if s.group == "ChAT" { &chat } else { &wt };
+                let cage_label = format!("E-0{}", s.animal[1..].parse::<usize>().unwrap_or(1));
+                let a = lab.insert("animal", o(json!({"label": s.animal, "sex": "M", "line_id": line, "dob": d(-110), "source": "vendor", "vendor": "JAX", "arrived_on": d(-90), "protocol_id": proto, "owner": "demo"})))?;
+                lab.move_animal(&a, &cages[cage_label.as_str()], Some("arrival"))?;
+                lab.record_surgery(serde_json::from_value(json!({
+                    "procedure": {"animal_id": a, "performed_on": d(-45), "operators": "demo", "protocol_id": proto, "anesthesia": "isoflurane 1.5–2 %", "analgesia": "meloxicam 5 mg/kg", "weight_pre_g": 26.5, "outcome": "recovered"},
+                    "frame": {"reference": "bregma", "skull_flat": 1, "atlas": "Paxinos & Franklin 2019"},
+                    "injections": [{"virus_lot_id": virus, "target_region": "NAc core", "hemisphere": "L", "ap_mm": 1.3, "ml_mm": -1.0, "dv_mm": 4.2, "dv_reference": "skull", "volume_nl": 300.0, "rate_nl_per_min": 50.0}],
+                    "implants": [{"kind": "optic_fiber", "target_region": "NAc core", "hemisphere": "L", "ap_mm": 1.3, "ml_mm": -1.0, "dv_mm": 4.1, "dv_reference": "skull", "core_um": 400.0, "na": 0.5}]
+                })).map_err(|e| FpError::from(e.to_string()))?)?;
+                lab.add_cohort_member(&cohort, &a, &s.group, "genotype", None)?;
+                animals.insert(s.animal.clone(), a);
+            }
+            let mut f = simplefp::session_fields(&Path::new(&dir).join(&s.block), Some(Path::new(&dir)), &preset)?;
+            f.insert("animal_id".into(), animals[&s.animal].clone().into());
+            f.insert("paradigm".into(), "refeed".into());
+            f.insert("condition".into(), s.condition.clone().into());
+            let sid = lab.insert("session", f)?;
+            lab.add_cohort_session(&cohort, &sid, &s.condition)?;
+        }
+        // A breeding pair with a litter due to wean, and a recent surgery needing post-op checks.
+        let sire = lab.insert("animal", o(json!({"label": "S-01", "sex": "M", "line_id": chat, "dob": d(-150), "source": "vendor", "vendor": "JAX", "arrived_on": d(-130), "protocol_id": proto})))?;
+        let dam = lab.insert("animal", o(json!({"label": "D-01", "sex": "F", "line_id": wt, "dob": d(-140), "source": "vendor", "vendor": "JAX", "arrived_on": d(-130), "protocol_id": proto})))?;
+        lab.move_animal(&sire, &cages["B-01"], Some("mating"))?;
+        lab.move_animal(&dam, &cages["B-01"], Some("mating"))?;
+        let pair = lab.insert("breeding_pair", o(json!({"cage_id": cages["B-01"], "kind": "pair", "male_id": sire, "set_up_on": d(-60), "goal": "ChAT-Cre het"})))?;
+        lab.insert("litter", o(json!({"breeding_pair_id": pair, "dam_id": dam, "born_on": d(-20), "born_count": 7})))?;
+        let fresh = lab.insert("animal", o(json!({"label": "A-09", "sex": "F", "line_id": chat, "dob": d(-80), "source": "vendor", "vendor": "JAX", "arrived_on": d(-60), "protocol_id": proto})))?;
+        lab.move_animal(&fresh, &cages["H-01"], Some("arrival"))?;
+        lab.record_surgery(serde_json::from_value(json!({
+            "procedure": {"animal_id": fresh, "performed_on": d(-1), "operators": "demo", "protocol_id": proto, "weight_pre_g": 22.1, "outcome": "recovered"},
+            "frame": {"reference": "bregma", "skull_flat": 1},
+            "injections": [{"virus_lot_id": virus, "target_region": "BLA", "hemisphere": "R", "ap_mm": -1.4, "ml_mm": 3.3, "dv_mm": 4.9, "dv_reference": "skull", "volume_nl": 250.0}],
+            "implants": [{"kind": "optic_fiber", "target_region": "BLA", "hemisphere": "R", "ap_mm": -1.4, "ml_mm": 3.3, "dv_mm": 4.8, "dv_reference": "skull", "core_um": 400.0, "na": 0.5}]
+        })).map_err(|e| FpError::from(e.to_string()))?)?;
+        lab.insert("note", o(json!({"author": "demo", "body_md": "Fiber patency good after surgery; mild swelling at incision.", "entity": "animal", "entity_id": fresh})))?;
+        Ok(())
+    }
+
+    pub fn verify_audit(&self) -> R<u32> {
+        Ok(self.lab.lock().unwrap().verify_audit()? as u32)
+    }
+}
+
 fn envelope(y: &[f64], t0: f64, fs: f64, a: f64, b: f64, buckets: usize) -> Vec<u8> {
     let n = y.len();
     if n == 0 || b <= a {
@@ -556,6 +726,27 @@ fn results_of(a: &Analysis, p: &Preset) -> Results {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn demo_lab_feeds_cohort_analysis() {
+        let dir = std::env::temp_dir().join(format!("simplefp-demolab-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = LabStore::open(dir.join("lab.sqlite").display().to_string(), "T".into()).unwrap();
+        store.seed_demo(dir.join("data").display().to_string(), "2026-10-25".into()).unwrap();
+        let tasks = store.tasks("2026-10-25".into(), 21).unwrap();
+        for kind in ["wean", "post_op", "protocol"] {
+            assert!(tasks.contains(&format!("\"kind\":\"{kind}\"")), "missing {kind} task: {tasks}");
+        }
+        let cohorts: Vec<serde_json::Value> = serde_json::from_str(&store.list("cohort".into(), None, None).unwrap()).unwrap();
+        let id = cohorts[0]["id"].as_str().unwrap().to_string();
+        store.freeze_cohort(id.clone()).unwrap();
+        let path = store.write_cohort_manifest(id, dir.join("data").display().to_string(), dir.join("cohort.toml").display().to_string()).unwrap();
+        let c = Cohort::open(path).unwrap().results();
+        assert_eq!(c.sessions.iter().filter(|s| s.status == "ok").count(), 16);
+        assert!(c.tests.iter().any(|t| t.contrast.starts_with("ChAT − WT") && t.metric == "mean" && t.p < 0.05));
+        assert!(store.verify_audit().unwrap() > 50);
+        std::fs::remove_dir_all(&dir).ok();
+    }
 
     #[test]
     fn envelope_bounds_and_lod() {

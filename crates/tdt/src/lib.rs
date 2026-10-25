@@ -197,8 +197,14 @@ pub fn is_block(dir: &Path) -> bool {
     find_ext(dir, "tsq").is_ok_and(|v| !v.is_empty())
 }
 
-/// Read a TDT block directory.
-pub fn read_block(dir: &Path, opts: &ReadOptions) -> Result<Block> {
+struct Index {
+    tsq_path: PathBuf,
+    start_unix: f64,
+    duration: Option<f64>,
+    by_store: BTreeMap<u32, Vec<Header>>,
+}
+
+fn index(dir: &Path) -> Result<Index> {
     let tsq_path = match find_ext(dir, "tsq")?.as_slice() {
         [p] => p.clone(),
         [] => return bad(format!("no .tsq file in {}", dir.display())),
@@ -225,10 +231,44 @@ pub fn read_block(dir: &Path, opts: &ReadOptions) -> Result<Block> {
         }
         by_store.entry(h.code).or_default().push(*h);
     }
+    Ok(Index { tsq_path, start_unix, duration, by_store })
+}
+
+/// What a block contains, from the TSQ index alone (no sample data is read).
+#[derive(Debug, Clone)]
+pub struct BlockInfo {
+    pub name: String,
+    pub start_unix: f64,
+    pub duration: Option<f64>,
+    pub streams: Vec<String>,
+    pub epocs: Vec<String>,
+    pub tsq_path: PathBuf,
+}
+
+pub fn block_info(dir: &Path) -> Result<BlockInfo> {
+    let ix = index(dir)?;
+    let mut streams = vec![];
+    let mut epocs = vec![];
+    for (code, hs) in &ix.by_store {
+        let k = hs[0].kind;
+        if k == EVTYPE_STRON || k == EVTYPE_MARK {
+            epocs.push(store_name(*code));
+        } else if k & EVTYPE_MASK == EVTYPE_STREAM {
+            streams.push(store_name(*code));
+        }
+    }
+    let name = ix.tsq_path.file_stem().map_or(String::new(), |s| s.to_string_lossy().into_owned());
+    Ok(BlockInfo { name, start_unix: ix.start_unix, duration: ix.duration, streams, epocs, tsq_path: ix.tsq_path })
+}
+
+/// Read a TDT block directory.
+pub fn read_block(dir: &Path, opts: &ReadOptions) -> Result<Block> {
+    let Index { tsq_path, start_unix, duration, by_store, .. } = index(dir)?;
 
     let tev_path = tsq_path.with_extension("tev");
     // Whole-file read: fine for photometry tanks (≤ a few GB); mmap if raw 24 kHz stores matter.
-    let tev = if tev_path.exists() { Some(read(&tev_path)?) } else { None };
+    let needs_tev = by_store.iter().any(|(c, hs)| hs[0].kind & EVTYPE_MASK == EVTYPE_STREAM && hs[0].kind & EVTYPE_UCF == 0 && opts.wants(&store_name(*c)));
+    let tev = if needs_tev && tev_path.exists() { Some(read(&tev_path)?) } else { None };
     let sev_files = find_ext(dir, "sev")?;
 
     let mut streams = BTreeMap::new();
@@ -483,6 +523,8 @@ mod tests {
 
         let only = read_block(&dir, &ReadOptions { stores: Some(vec!["405A".into()]) }).unwrap();
         assert_eq!(only.streams.keys().collect::<Vec<_>>(), ["405A"]);
+        let info = block_info(&dir).unwrap();
+        assert_eq!((info.streams.len(), info.epocs.len()), (2, 2));
         assert!(only.epocs.is_empty());
         fs::remove_dir_all(&dir).ok();
     }

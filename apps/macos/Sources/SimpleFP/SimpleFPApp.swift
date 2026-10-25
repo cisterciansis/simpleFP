@@ -3,11 +3,13 @@ import SwiftUI
 @main
 struct SimpleFPApp: App {
     @State private var library = Library()
+    @State private var lab = LabModel()
 
     var body: some Scene {
         Window("SimpleFP", id: "main") {
             ContentView()
                 .environment(library)
+                .environment(lab)
                 .frame(minWidth: 820, minHeight: 600)
         }
         .defaultSize(width: 1040, height: 760)

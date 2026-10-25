@@ -102,6 +102,26 @@ impl Recording {
     }
 }
 
+/// Fields for a lab `session` row from a block on disk: identity read from the
+/// TSQ index (no sample data), channels chosen by the preset, and the block path
+/// stored relative to `data_root` so the store survives volume renames.
+pub fn session_fields(block: &Path, data_root: Option<&Path>, preset: &Preset) -> Result<serde_json::Map<String, serde_json::Value>, String> {
+    let info = simplefp_tdt::block_info(block).map_err(|e| e.to_string())?;
+    let pick = |names: &[String]| names.iter().find(|n| info.streams.contains(n)).cloned();
+    let signal = pick(&preset.channels.signal).ok_or_else(|| format!("{}: none of the signal stores {:?} found", info.name, preset.channels.signal))?;
+    let tsq = fs::read(&info.tsq_path).map_err(|e| format!("{}: {e}", info.tsq_path.display()))?;
+    let abs = block.canonicalize().map_err(|e| format!("{}: {e}", block.display()))?;
+    let rel = data_root.and_then(|r| r.canonicalize().ok()).and_then(|r| abs.strip_prefix(r).ok().map(Path::to_path_buf)).unwrap_or(abs);
+    let mut m = serde_json::Map::new();
+    m.insert("block_path".into(), rel.display().to_string().into());
+    m.insert("block_digest".into(), blake3::hash(&tsq).to_hex().to_string().into());
+    m.insert("block_name".into(), info.name.into());
+    m.insert("started_unix".into(), info.start_unix.into());
+    m.insert("signal_store".into(), signal.into());
+    m.insert("control_store".into(), pick(&preset.channels.control).map_or(serde_json::Value::Null, Into::into));
+    Ok(m)
+}
+
 /// Parse a manual events CSV: header `event,time_s`, one event per row.
 pub fn read_events_csv(path: &Path) -> Result<Vec<EventSource>, String> {
     let src = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
