@@ -55,6 +55,15 @@
 - A colony cohort freezes into a members hash, then exports a `cohort.toml` that the analysis engine runs. While a
   cohort is blinded, its groups are written as blind codes.
 
+## Video
+
+- Pixels stay in Swift (AVFoundation); `simplefp-video` (pure Rust) owns the timing and scoring science.
+- **Frame index is canonical.** Block time comes from the camera epoc (`Cam1.onset[k]`), never from the video file's
+  timestamps or the nominal fps. Seeks use the sample-table presentation times, mapped through the track's edit list
+  and kept as exact `CMTime` values. Both details were found necessary in testing (docs/research/video-ai.md §6).
+- Scoring files: `<block>/simplefp/annotations/<scorer>.json`. Each one records the clock hash it was scored against,
+  is written atomically, and uses one file per scorer, so agreement can be computed between files.
+
 ## Adding a method
 
 1. Implement it in `crates/core` as a pure function with a unit test (golden values or a ground-truth simulation).

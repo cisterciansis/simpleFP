@@ -178,14 +178,22 @@ private struct RecordingView: View {
     @Environment(Library.self) private var library
     let rec: Recording
     @State private var mode: TraceMode = .dff
+    @State private var showVideo = true
 
     var body: some View {
         VSplitView {
             VStack(spacing: 6) {
                 header
-                TracePlot(rec: rec, mode: mode)
-                    .frame(minHeight: 180)
-                OverviewStrip(rec: rec)
+                HStack(alignment: .top, spacing: 10) {
+                    if let v = rec.video, showVideo {
+                        VideoPane(model: v).frame(minWidth: 260, idealWidth: 380, maxWidth: 520)
+                    }
+                    VStack(spacing: 6) {
+                        TracePlot(rec: rec, mode: mode)
+                            .frame(minHeight: 180)
+                        OverviewStrip(rec: rec)
+                    }
+                }
             }
             .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 10)
             .frame(minHeight: 280)
@@ -193,9 +201,16 @@ private struct RecordingView: View {
             EventPanel(rec: rec)
                 .frame(minHeight: 220)
         }
+        .task(id: rec.id) { await rec.loadVideo() }
+        .onDisappear { rec.video?.player.pause() }
         .navigationTitle(rec.title)
         .navigationSubtitle(subtitle)
         .toolbar {
+            ToolbarItem {
+                Button { showVideo.toggle() } label: { Label("Video", systemImage: showVideo ? "video.fill" : "video") }
+                    .disabled(rec.video == nil)
+                    .help(rec.video == nil ? "No camera video in this block (…Cam1.mp4)" : "Show or hide the synchronized video and scoring")
+            }
             ToolbarItem {
                 EventsMenu(rec: rec)
             }
@@ -228,6 +243,7 @@ private struct RecordingView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 if rec.isRunning { ProgressView().controlSize(.small) }
+                if let st = rec.status { ProgressView().controlSize(.small); Text(st).font(.caption).foregroundStyle(.secondary) }
                 modePicker
             }
         }

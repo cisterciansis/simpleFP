@@ -98,7 +98,7 @@ struct TracePlot: View {
 
     var body: some View {
         let session = rec.session, range = rec.visible, series = series, revision = rec.revision
-        let qc = rec.results?.qc, events = rec.results?.events ?? []
+        let qc = rec.results?.qc, events = rec.results?.events ?? [], cursor = rec.cursor
         GeometryReader { geo in
             Canvas { ctx, size in
                 _ = revision
@@ -128,12 +128,24 @@ struct TracePlot: View {
                 for (s, e) in zip(series, envs) {
                     ctx.stroke(envelopePath(e, f), with: .color(s.color), style: StrokeStyle(lineWidth: s.width, lineJoin: .round, dash: s.dashed ? [4, 3] : []))
                 }
+                if let c = cursor, range.contains(c) {
+                    var p = Path(); p.move(to: CGPoint(x: f.x(c), y: rect.minY)); p.addLine(to: CGPoint(x: f.x(c), y: rect.maxY))
+                    ctx.stroke(p, with: .color(.red), lineWidth: 1.5)
+                }
             }
             .overlay(alignment: .topTrailing) { legend.padding(.trailing, inset.trailing + 6).padding(.top, inset.top + 4) }
             .contentShape(Rectangle())
             .gesture(pan(width: plotRect(geo.size).width))
             .simultaneousGesture(zoom)
             .onTapGesture(count: 2) { withAnimation(.snappy) { rec.visible = 0...max(rec.info.durationS, 1) } }
+            .simultaneousGesture(SpatialTapGesture().onEnded { v in
+                // Click to place the playhead; the video follows.
+                let r = plotRect(geo.size)
+                guard r.contains(v.location) else { return }
+                let t = rec.visible.lowerBound + Double((v.location.x - r.minX) / r.width) * span
+                rec.cursor = t
+                rec.video?.seek(blockTime: t)
+            })
             .onContinuousHover { phase in
                 if case .active(let p) = phase { hover = p } else { hover = nil }
             }

@@ -68,6 +68,35 @@ pub struct PresetInfo {
     pub toml: String,
 }
 
+#[derive(uniffi::Record)]
+pub struct VideoFile {
+    pub camera: String,
+    pub path: String,
+}
+
+#[derive(uniffi::Record)]
+pub struct ClockInfo {
+    pub times: Vec<u8>,
+    pub fps: f64,
+    pub jitter_ms: f64,
+    pub gaps: u32,
+    pub hash: String,
+}
+
+/// Default ethogram (feeding) as JSON.
+#[uniffi::export]
+pub fn default_ethogram() -> String {
+    serde_json::to_string(&simplefp_video::Ethogram::feeding()).unwrap_or_default()
+}
+
+/// Event specs from an annotation set (bout onsets as `label`, offsets as `label_offset`;
+/// unreviewed model proposals excluded).
+#[uniffi::export]
+pub fn annotation_events(json: String) -> R<Vec<EventSpec>> {
+    let set: simplefp::AnnotationSet = serde_json::from_str(&json).map_err(|e| FpError::from(e.to_string()))?;
+    Ok(simplefp_video::event_sets(&set.annotations).into_iter().map(|(label, times)| EventSpec::Manual { label, times }).collect())
+}
+
 #[derive(uniffi::Enum, Clone)]
 pub enum EventSpec {
     Epoc { store: String },
@@ -275,6 +304,74 @@ impl Session {
             },
         };
         envelope(y, o.t0, o.fs, t0, t1, buckets.max(1) as usize)
+    }
+
+    /// Camera videos stored in the block (`…Cam1.mp4`).
+    pub fn videos(&self) -> Vec<VideoFile> {
+        simplefp::block_videos(&self.rec.block.path).into_iter().map(|(camera, p)| VideoFile { camera, path: p.display().to_string() }).collect()
+    }
+
+    /// Frame clock of a camera epoc: per-frame block times as little-endian f64 bytes.
+    pub fn frame_clock(&self, camera: String) -> R<ClockInfo> {
+        let c = self.rec.frame_clock(&camera)?;
+        Ok(ClockInfo { times: c.frame_times().iter().flat_map(|t| t.to_le_bytes()).collect(), fps: c.fps, jitter_ms: c.jitter_ms, gaps: c.gaps as u32, hash: simplefp::clock_hash(&camera, &c) })
+    }
+
+    /// Reconcile the clock with the video's sample-table frame count. Returns a warning or fails.
+    pub fn check_video_frames(&self, camera: String, video_frames: u64) -> R<Option<String>> {
+        let c = self.rec.frame_clock(&camera)?;
+        Ok(c.check_frame_count(video_frames as usize, (c.fps.round() as usize).max(1))?)
+    }
+
+    pub fn load_annotations(&self, scorer: String) -> R<Option<String>> {
+        Ok(simplefp::load_annotations(&self.rec.block.path, &scorer)?.map(|s| serde_json::to_string(&s).unwrap_or_default()))
+    }
+
+    /// Scorers with saved annotation files.
+    pub fn scorers(&self) -> Vec<String> {
+        let mut v: Vec<String> = std::fs::read_dir(simplefp::annotations_dir(&self.rec.block.path))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|e| e.path().file_stem().and_then(|s| s.to_str()).map(str::to_owned).filter(|_| e.path().extension().is_some_and(|x| x == "json")))
+            .collect();
+        v.sort();
+        v
+    }
+
+    pub fn save_annotations(&self, json: String) -> R<String> {
+        let set: simplefp::AnnotationSet = serde_json::from_str(&json).map_err(|e| FpError::from(e.to_string()))?;
+        Ok(simplefp::save_annotations(&self.rec.block.path, &set)?.display().to_string())
+    }
+
+    /// Agreement of two scorers per behavior on a 1/fps frame grid (frame κ, PABAK, bout/event F1) as JSON.
+    pub fn agreement(&self, scorer_a: String, scorer_b: String, fps: f64) -> R<String> {
+        use simplefp_video as v;
+        let load = |s: &str| simplefp::load_annotations(&self.rec.block.path, s)?.ok_or_else(|| format!("no annotations by '{s}'"));
+        let (a, b) = (load(&scorer_a)?, load(&scorer_b)?);
+        if a.clock_hash != b.clock_hash {
+            return Err(FpError::from("the two scorers used different frame clocks".to_string()));
+        }
+        let dur = self.info().duration_s;
+        let n = (dur * fps).ceil() as usize;
+        let mut out = vec![];
+        for beh in &a.ethogram.behaviors {
+            let pick = |set: &simplefp::AnnotationSet| set.annotations.iter().filter(|x| x.label == beh.label && x.usable()).cloned().collect::<Vec<_>>();
+            let (pa, pb) = (pick(&a), pick(&b));
+            let row = match beh.kind {
+                v::BehaviorKind::State => {
+                    let fa = v::frame_agreement(&v::raster(&pa, &beh.label, 0.0, 1.0 / fps, n), &v::raster(&pb, &beh.label, 0.0, 1.0 / fps, n));
+                    let bouts = |x: &[v::Annotation]| x.iter().filter_map(|y| y.end_s.map(|e| (y.start_s, e))).collect::<Vec<_>>();
+                    serde_json::json!({"label": beh.label, "kind": "state", "frame": fa, "bout": v::bout_f1(&bouts(&pa), &bouts(&pb), 0.5)})
+                }
+                v::BehaviorKind::Point => {
+                    let t = |x: &[v::Annotation]| x.iter().map(|y| y.start_s).collect::<Vec<_>>();
+                    serde_json::json!({"label": beh.label, "kind": "point", "event": v::event_f1(&t(&pa), &t(&pb), 0.5)})
+                }
+            };
+            out.push(row);
+        }
+        Ok(serde_json::to_string(&out).unwrap_or_default())
     }
 
     /// Export CSVs + run.json for the current analysis.

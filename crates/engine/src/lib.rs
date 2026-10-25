@@ -122,6 +122,92 @@ pub fn session_fields(block: &Path, data_root: Option<&Path>, preset: &Preset) -
     Ok(m)
 }
 
+/// Videos stored with a block: files named `…Cam<n>.{mp4,mov,avi}` (Synapse iV/CamHal naming).
+pub fn block_videos(block: &Path) -> Vec<(String, PathBuf)> {
+    let mut v: Vec<(String, PathBuf)> = fs::read_dir(block)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().and_then(|x| x.to_str()).is_some_and(|x| ["mp4", "mov", "avi", "m4v"].contains(&x.to_ascii_lowercase().as_str())))
+        .filter_map(|p| {
+            let stem = p.file_stem()?.to_str()?.to_string();
+            let i = stem.rfind("Cam")?;
+            let cam = &stem[i..];
+            (cam.len() > 3 && cam[3..].chars().all(|c| c.is_ascii_digit())).then(|| (cam.to_string(), p.clone()))
+        })
+        .collect();
+    v.sort();
+    v
+}
+
+/// Scorer annotation files live beside the block: `<block>/simplefp/annotations/<scorer>.json`.
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AnnotationSet {
+    pub schema: u32,
+    pub scorer: String,
+    pub camera: String,
+    /// Hash of the frame clock the times were scored against (camera store + onsets).
+    pub clock_hash: String,
+    pub ethogram: simplefp_video::Ethogram,
+    pub annotations: Vec<simplefp_video::Annotation>,
+}
+
+fn scorer_ok(s: &str) -> Result<(), String> {
+    if s.is_empty() || s.len() > 32 || !s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err("scorer must be 1–32 characters of letters, digits, - or _".into());
+    }
+    Ok(())
+}
+
+pub fn annotations_dir(block: &Path) -> PathBuf {
+    block.join("simplefp").join("annotations")
+}
+
+pub fn clock_hash(camera: &str, clock: &simplefp_video::FrameClock) -> String {
+    let mut h = blake3::Hasher::new();
+    h.update(camera.as_bytes());
+    for t in clock.frame_times() {
+        h.update(&t.to_le_bytes());
+    }
+    h.finalize().to_hex().to_string()
+}
+
+pub fn save_annotations(block: &Path, set: &AnnotationSet) -> Result<PathBuf, String> {
+    scorer_ok(&set.scorer)?;
+    set.ethogram.validate()?;
+    for a in &set.annotations {
+        a.validate().map_err(|e| format!("{} at {:.2} s: {e}", a.label, a.start_s))?;
+    }
+    let dir = annotations_dir(block);
+    fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let path = dir.join(format!("{}.json", set.scorer));
+    // Write-then-rename so a crash never leaves a half-written scoring file.
+    let tmp = path.with_extension("json.tmp");
+    fs::write(&tmp, serde_json::to_string_pretty(set).map_err(|e| e.to_string())?).map_err(|e| format!("{}: {e}", tmp.display()))?;
+    fs::rename(&tmp, &path).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(path)
+}
+
+pub fn load_annotations(block: &Path, scorer: &str) -> Result<Option<AnnotationSet>, String> {
+    scorer_ok(scorer)?;
+    let path = annotations_dir(block).join(format!("{scorer}.json"));
+    if !path.exists() {
+        return Ok(None);
+    }
+    let s = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    serde_json::from_str(&s).map(Some).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+impl Recording {
+    /// Frame clock from a camera epoc (`Cam1`, …) of this block.
+    pub fn frame_clock(&self, camera: &str) -> Result<simplefp_video::FrameClock, String> {
+        let e = self.block.epocs.get(camera).ok_or_else(|| format!("no camera epoc '{camera}' in this block"))?;
+        simplefp_video::FrameClock::from_epoc(&e.onset, &e.data)
+    }
+}
+
 /// Parse a manual events CSV: header `event,time_s`, one event per row.
 pub fn read_events_csv(path: &Path) -> Result<Vec<EventSource>, String> {
     let src = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -336,12 +422,14 @@ pub fn write_demo_block_with(dir: &Path, params: &simplefp_core::sim::SimParams)
     let s = sim::simulate(params);
     let f32s = |v: &[f64]| v.iter().map(|&x| x as f32).collect::<Vec<f32>>();
     let (sig, ctl) = (f32s(&s.signal), f32s(&s.control));
+    // A 15 fps camera strobe (Synapse camera gizmo style) with ±1 ms jitter.
+    let cam: Vec<f64> = (0..((s.signal.len() as f64 / s.fs - 1.0) * 15.0) as usize).map(|k| 0.4 + k as f64 / 15.0 + if k % 3 == 0 { 0.001 } else { 0.0 }).collect();
     write_block(
         dir,
         dir.file_name().and_then(|n| n.to_str()).unwrap_or("Demo"),
         1.75e9,
         &[SynthStream { name: "465A", fs: s.fs as f32, channels: &[&sig] }, SynthStream { name: "405A", fs: s.fs as f32, channels: &[&ctl] }],
-        &[SynthEpoc { name: "Evt_", onsets: &s.events, offsets: None }],
+        &[SynthEpoc { name: "Evt_", onsets: &s.events, offsets: None }, SynthEpoc { name: "Cam1", onsets: &cam, offsets: None }],
     )
     .map_err(|e| format!("{}: {e}", dir.display()))?;
     Ok(s.events)
@@ -384,6 +472,25 @@ mod tests {
         assert!(curve.significant.iter().any(|&s| s));
         let files = cohort::export_cohort(&run, &dir.join("out")).unwrap();
         assert!(files.iter().any(|f| f.ends_with("metric_tests.csv")));
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn camera_clock_and_annotation_roundtrip() {
+        let dir = std::env::temp_dir().join(format!("simplefp-cam-{}", std::process::id()));
+        write_demo_block(&dir, 5).unwrap();
+        let p = simplefp_core::preset::builtin("grab-ach3.0-tdt").unwrap();
+        let rec = load(&dir, &p).unwrap();
+        let clock = rec.frame_clock("Cam1").unwrap();
+        assert!((clock.fps - 15.0).abs() < 0.01 && clock.gaps == 0, "{clock:?}");
+        fs::write(dir.join("Demo_Cam1.mp4"), b"").unwrap();
+        assert_eq!(block_videos(&dir).len(), 1);
+        use simplefp_video::*;
+        let a = Annotation { label: "eating".into(), start_s: 100.0, end_s: Some(104.0), scorer: "DA".into(), source: Source::Manual, model: None, confidence: None, review: Review::Accepted };
+        let set = AnnotationSet { schema: 1, scorer: "DA".into(), camera: "Cam1".into(), clock_hash: clock_hash("Cam1", &clock), ethogram: Ethogram::feeding(), annotations: vec![a] };
+        save_annotations(&dir, &set).unwrap();
+        assert_eq!(load_annotations(&dir, "DA").unwrap().unwrap().annotations.len(), 1);
+        assert!(save_annotations(&dir, &AnnotationSet { scorer: "../x".into(), ..set }).is_err());
         fs::remove_dir_all(&dir).ok();
     }
 

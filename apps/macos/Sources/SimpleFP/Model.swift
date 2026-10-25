@@ -22,6 +22,10 @@ final class Recording: Identifiable {
     var revision = 0
     var visible: ClosedRange<Double>
     var selectedEvent: String?
+    /// Shared playhead on the block clock (video frame ↔ trace).
+    var cursor: Double?
+    var video: VideoModel?
+    var status: String?
 
     init(url: URL, preset: PresetInfo) throws {
         self.url = url
@@ -31,7 +35,8 @@ final class Recording: Identifiable {
         presetTOML = session.presetToml()
         visible = 0...max(info.durationS, 1)
         // Default: analyze around every epoc with a sensible number of events.
-        epocs = Set(info.epocs.filter { (2...2000).contains($0.count) && $0.name != "Tick" }.map(\.name))
+        // Camera strobes (Cam1…) and Tick are clocks, not behavior events.
+        epocs = Set(info.epocs.filter { (2...2000).contains($0.count) && $0.name != "Tick" && !$0.name.hasPrefix("Cam") }.map(\.name))
     }
 
     var title: String { info.name }
@@ -58,6 +63,14 @@ final class Recording: Identifiable {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    /// Open the first camera video stored with the block, if any.
+    func loadVideo() async {
+        guard video == nil, let file = session.videos().first else { return }
+        let v = VideoModel(rec: self, file: file, scorer: UserDefaults.standard.string(forKey: "labInitials") ?? NSUserName().prefix(2).uppercased())
+        video = v
+        await v.load()
     }
 
     func use(preset p: PresetInfo) async {
@@ -156,6 +169,17 @@ final class Library {
         do {
             _ = try writeDemo(dir: dir.path, seed: 1)
             await open(dir)
+            // Render a matching arena video so scoring can be tried end to end.
+            guard let rec = recordings.first(where: { $0.url == dir }) else { return }
+            rec.status = "Rendering demo video…"
+            let clock = try rec.session.frameClock(camera: "Cam1")
+            let times = clock.times.withUnsafeBytes { Array($0.bindMemory(to: Double.self)) }
+            let events = rec.results?.events.first?.eventTimes ?? []
+            let url = dir.appendingPathComponent("\(dir.lastPathComponent)_Cam1.mp4")
+            // Two trailing frames past the last strobe, as real TDT recordings have (TN0987).
+            try await DemoVideo.write(to: url, frames: times.count + 2, fps: 15, frameTimes: times, events: events)
+            rec.status = nil
+            await rec.loadVideo()
         } catch {
             alert = error.localizedDescription
         }

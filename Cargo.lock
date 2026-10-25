@@ -748,6 +748,7 @@ dependencies = [
  "serde_json",
  "simplefp-core",
  "simplefp-tdt",
+ "simplefp-video",
  "toml",
 ]
 
@@ -778,6 +779,7 @@ dependencies = [
  "serde_json",
  "simplefp",
  "simplefp-lab",
+ "simplefp-video",
  "toml",
  "uniffi",
 ]
@@ -796,6 +798,13 @@ dependencies = [
 [[package]]
 name = "simplefp-tdt"
 version = "0.1.0"
+
+[[package]]
+name = "simplefp-video"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "siphasher"

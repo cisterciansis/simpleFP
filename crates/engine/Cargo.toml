@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 simplefp-core.workspace = true
 simplefp-tdt.workspace = true
+simplefp-video.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 blake3 = "1.8"

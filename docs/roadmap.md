@@ -35,9 +35,26 @@ reproducible from a preset and a manifest.
 - Agent interface: a documented JSON-over-stdio mode in the CLI so an agent can inspect blocks, propose a preset,
   run it and read QC without the GUI
 
-## v0.4: behavior video
-- Video + photometry sync via TDT camera epocs (`Cam1` frame TTLs) or Synapse video timestamps
-- Annotation suite: keyboard-driven event and bout scoring on a video timeline aligned to ΔF/F; ethogram view
+## v0.4: behavior video (design: docs/research/video-ai.md)
+- [x] `simplefp-video`: frame clock from the `Cam1` epoc. Frame-number gaps are errors; extra trailing frames are
+  allowed, as TDT TN0987 documents; inter-frame jitter and gap QC; clock hash.
+- [x] Annotations with provenance (scorer, manual/model, model version, confidence, review). Unreviewed model
+  proposals never reach analysis.
+- [x] Agreement metrics: frame κ + PABAK + prevalence, event F1, bout F1 at tIoU 0.5, onset error
+- [x] DeepLabCut CSV import, speed, distance to ROI
+- [x] Mac player:
+  - sample-table frame times mapped through edit lists, zero-tolerance seeks;
+  - trace playhead synchronized in both directions;
+  - ethogram hotkeys for point and bout events;
+  - per-scorer sidecar files;
+  - "Analyze These Events" feeds the photometry pipeline;
+  - demo arena video
+- Next:
+  - agreement view in the app;
+  - blinded scoring mode;
+  - pose overlay and ROI editor;
+  - Lightning Pose / SLEAP h5 / NWB ndx-pose import;
+  - CamHal AVI transcode on import
 - Pose and tracking: run models on-device (Core ML / MLX) such as keypoints, centroid and region-of-interest occupancy;
   import from DeepLabCut, SLEAP and Bonsai
 - AI-assisted scoring: vision models propose events, the user confirms; inter-rater agreement reported
