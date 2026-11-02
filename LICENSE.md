@@ -1,5 +1,4 @@
 Required Notice: Copyright (c) 2025-2026 cisterciansis (https://github.com/cisterciansis/simpleFP)
-Required Notice: SimpleFP is licensed for noncommercial use only. Cite it in any publication, poster, thesis or derived software that uses it (see CITATION.cff). Commercial licenses: contact https://github.com/cisterciansis
 
 # PolyForm Noncommercial License 1.0.0
 

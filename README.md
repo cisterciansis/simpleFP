@@ -149,8 +149,8 @@ change published numbers.
 
 ## Citing
 
-If SimpleFP contributes to a paper, poster, thesis or talk, cite it. GitHub's **Cite this repository** button
-(from [CITATION.cff](CITATION.cff)) gives APA and BibTeX:
+If SimpleFP helped your work, a citation or a link back to this repo is appreciated. GitHub's **Cite this
+repository** button (from [CITATION.cff](CITATION.cff)) gives APA and BibTeX:
 
 ```bibtex
 @software{simplefp,
@@ -170,6 +170,6 @@ license:
 - **Not allowed without a separate license:** commercial use, including selling it, bundling it in a paid product,
   or offering it as a paid service. For a commercial license, contact [cisterciansis](https://github.com/cisterciansis).
 - **Copies and derived software** (forks, modified versions, ports) must keep [LICENSE.md](LICENSE.md) and its
-  `Required Notice` lines, which credit the author and this repository.
+  `Required Notice` line, which points back to this repository.
 - **Third-party components** keep their own licenses: Rust crates (MIT/Apache-2.0), and RTMPose weights, which are
   downloaded by the user from OpenMMLab and not redistributed.
