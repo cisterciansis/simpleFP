@@ -147,6 +147,29 @@ verified.
 What the old MATLAB pipeline got wrong is in [docs/legacy-audit.md](docs/legacy-audit.md). Some of those issues can
 change published numbers.
 
+## Citing
+
+If SimpleFP contributes to a paper, poster, thesis or talk, cite it. GitHub's **Cite this repository** button
+(from [CITATION.cff](CITATION.cff)) gives APA and BibTeX:
+
+```bibtex
+@software{simplefp,
+  author = {cisterciansis},
+  title  = {SimpleFP: fiber photometry and behavior analysis for TDT recordings},
+  url    = {https://github.com/cisterciansis/simpleFP},
+  year   = {2026}
+}
+```
+
 ## License
 
-Not yet chosen. Until a license file is added, the code is public but all rights are reserved.
+SimpleFP is source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE.md), not an OSI open-source
+license:
+- **Free to use, study, modify and share for noncommercial purposes:** personal research, academic and nonprofit
+  labs, teaching, government research.
+- **Not allowed without a separate license:** commercial use, including selling it, bundling it in a paid product,
+  or offering it as a paid service. For a commercial license, contact [cisterciansis](https://github.com/cisterciansis).
+- **Copies and derived software** (forks, modified versions, ports) must keep [LICENSE.md](LICENSE.md) and its
+  `Required Notice` lines, which credit the author and this repository.
+- **Third-party components** keep their own licenses: Rust crates (MIT/Apache-2.0), and RTMPose weights, which are
+  downloaded by the user from OpenMMLab and not redistributed.

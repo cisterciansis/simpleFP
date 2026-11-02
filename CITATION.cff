@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use SimpleFP, please cite it as below. Citation is required by its license for publications and derived software."
+title: "SimpleFP: fiber photometry and behavior analysis for TDT recordings"
+type: software
+authors:
+  - alias: cisterciansis
+repository-code: "https://github.com/cisterciansis/simpleFP"
+url: "https://github.com/cisterciansis/simpleFP"
+license: PolyForm-Noncommercial-1.0.0
+version: 0.1.0
+date-released: 2026-11-01
+keywords:
+  - fiber photometry
+  - GRAB-ACh3.0
+  - Tucker-Davis Technologies
+  - behavior analysis
