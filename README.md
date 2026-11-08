@@ -64,13 +64,13 @@ Drop a block or a tank folder onto the window, or choose **File ▸ Open Demo Re
 ### AI agents (MCP)
 
 `simplefp mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server on stdio. Any MCP client
-(Claude Code, Claude Desktop, Cursor, …) can call these tools:
-- `inspect_block`, `list_presets`, `show_preset` (with validated overrides);
-- `analyze`, `cohort`;
-- `track`, `train_detector`, `propose_bouts`.
+(Claude Code, Claude Desktop, Cursor, …) gets the same tools as the CLI, under the same names: `inspect`, `presets`
+(with validated overrides), `run`, `cohort`, `track`, `classify-train`, `classify-predict`, `demo`, `demo-cohort`.
 
-Each tool runs the matching CLI subcommand, so results, files and validation are identical to the CLI. Arguments
-with unknown fields are rejected, and model proposals still need human review in the app. For Claude Code:
+Every tool is defined once in `crates/engine/src/tools.rs`. Its argument struct produces the CLI flags, the JSON
+arguments and the JSON Schema, and it returns JSON: the CLI prints its `summary` (`--json` prints all of it), and MCP
+returns it as `structuredContent`. Unknown fields are rejected, and model proposals still need human review in the
+app. For Claude Code:
 
 ```bash
 claude mcp add simplefp -- "$PWD/target/release/simplefp" mcp

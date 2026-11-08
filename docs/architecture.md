@@ -42,6 +42,14 @@
 | CSV + JSON outputs | Universally readable; FLMM-ready long format | Parquet/NWB when cohort pipelines need them |
 | Luau (`mlua`) for user scripts | Fastest embeddable sandboxed option measured; agents write Lua well (roadmap) | — |
 
+## Tools (one definition per capability)
+
+`crates/engine/src/tools.rs` is the registry every front-end dispatches through. A tool is an argument struct
+(`clap::Args` + `Deserialize` with `deny_unknown_fields` + `JsonSchema`, documented by its doc comments) and a `run`
+that returns a JSON object with a human `summary`. The CLI builds its subcommands from `TOOLS`; `simplefp mcp`
+lists the schemas and calls tools in-process (arguments size-bounded first, panics caught). To add a capability,
+write the struct and `impl Tool`, then add one line to `TOOLS`: the CLI, MCP and the tests pick it up.
+
 ## Lab store
 
 - One SQLite file per lab (`~/Library/Application Support/SimpleFP/lab.sqlite`; `SIMPLEFP_LAB` overrides it).
