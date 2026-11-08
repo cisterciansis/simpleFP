@@ -9,3 +9,5 @@
 - Presets are strict by design (`deny_unknown_fields` plus `Preset::validate`). Add keys deliberately and document them
   in `docs/presets.md`.
 - Never make the time axis relative to anything except the TDT block start.
+- New capabilities are tools in `crates/engine/src/tools.rs` (one struct + `impl Tool` + a line in `TOOLS`). The CLI
+  and MCP come from it; don't add subcommands or MCP tools by hand.

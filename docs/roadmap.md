@@ -34,6 +34,8 @@ reproducible from a preset and a manifest.
 - Preset and script library with search (by sensor, region, rig); shareable as a single `.toml` + `.luau` bundle
 - [x] Agent interface: `simplefp mcp`, a Model Context Protocol server (stdio) with inspect, preset, analysis, cohort,
   tracking and detector tools; arguments validated, CLI semantics
+- [x] Tool registry (`engine::tools`): each capability defined once; CLI subcommands, MCP tools and JSON Schemas
+  derive from it; structured JSON results (`--json`, MCP `structuredContent`)
 
 ## v0.4: behavior video (design: docs/research/video-ai.md)
 - [x] `simplefp-video`: frame clock from the `Cam1` epoc. Frame-number gaps are errors; extra trailing frames are

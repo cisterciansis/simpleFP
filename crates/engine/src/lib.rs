@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 
 pub mod behavior;
 pub mod cohort;
+pub mod tools;
 
 pub use simplefp_core as core;
 pub use simplefp_tdt as tdt;
